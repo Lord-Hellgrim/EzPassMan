@@ -19,7 +19,10 @@ Byte 192:   256 -> aead ad
 Byte 256:   512 -> Reserved
 
 BODY
-Byte 512: end   -> 10.000 Entry structs. Each struct is four utf-8 strings, with a maximum byte size listed below.
+Byte 512: 516   -> Number of occupied entries as a u32
+Byte 516: end   -> 10.000 Entry structs, the first [number of occupied entries] of which are meaningful while the rest are "empty". 
+                    Each struct is four length prefixed utf-8 strings (one byte length)
+                    with a maximum byte size listed below (first byte is length of string).
                     Number of entries determined by version.
                     Current version [0,0,2026]: 10.000 entries
                     Entry struct {
@@ -29,7 +32,6 @@ Byte 512: end   -> 10.000 Entry structs. Each struct is four utf-8 strings, with
                         256 byte note
                     }
 -------------
-
 */
 
 
@@ -44,19 +46,19 @@ import "core:crypto/argon2id"
 import "core:crypto/aead"
 
 import "core:encoding/endian"
+import "core:slice"
 
 MAX_ENTRIES :: 10_000
 SALT_SIZE :: 16
 TAG_SIZE :: 32
+PASSWORD_HASH_SIZE :: 32
 IV_SIZE :: 12
 
-Vault :: distinct [dynamic ; MAX_ENTRIES]Entry
-
 Entry :: struct {
-    record: string,
-    username: string,
-    password: string,
-    note: string,
+    record: [256]u8,
+    username: [256]u8,
+    password: [256]u8,
+    note: [256]u8,
 }
 
 Status :: enum {
@@ -102,12 +104,11 @@ read_params :: proc(encrypted_bloc: []u8) -> (VaultParams, Status) {
 }
 
 // The lifetime of the vault_file must outlive the Vault struct since the Vault struct holds pointers into the Vault
-open_vault :: proc(password: string, vault_file: []u8) -> (^Vault, Status) {
+open_vault :: proc(password: string, vault_file: []u8) -> ([dynamic]Entry, Status) {
     
     hash_params, _ := read_params(vault_file)
-    vault := new(Vault)
 
-    password_hash : [TAG_SIZE]u8
+    password_hash : [PASSWORD_HASH_SIZE]u8
     alloc_error := argon2id.derive(
         &hash_params.pass_hash_params, 
         transmute([]u8)password[:], 
@@ -115,6 +116,10 @@ open_vault :: proc(password: string, vault_file: []u8) -> (^Vault, Status) {
         password_hash[:], 
         ad = hash_params.ad[:],
     )
+    
+    if alloc_error != .None {
+        return nil, .Failure
+    }
 
     decryption_failed := aead.open_oneshot(
         .CHACHA20POLY1305, 
@@ -127,12 +132,16 @@ open_vault :: proc(password: string, vault_file: []u8) -> (^Vault, Status) {
     )
 
     if decryption_failed {
-        return vault, .Failure
-    }
-
-    if alloc_error != .None {
         return nil, .Failure
     }
+
+    number_of_entries, _ := endian.get_u32(vault_file[512:516], .Little)
+    if number_of_entries >= 10_000 {
+        return nil, .Failure
+    }
+
+    vault := slice.into_dynamic(transmute([]Entry)vault_file[516:])
+    resize(&vault, number_of_entries)
 
     return vault, .Success
     
