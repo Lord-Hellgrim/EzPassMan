@@ -157,6 +157,13 @@ lock_vault :: proc(password: string, vault: ^Vault) -> Status {
 
 }
 
+make_new_vault :: proc() -> ^Vault {
+    vault: ^Vault = new(Vault, context.allocator)
+    vault.magic_bytes = {'E', 'Z', 'P', 'A', 'S', 'S', 'M', 'N'}
+    
+
+}
+
 main :: proc() {
     pull := os.Process_Desc{
         working_dir = "./vault",
