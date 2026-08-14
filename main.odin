@@ -1,5 +1,6 @@
 package EzPassMan
 
+import "core:crypto"
 
 import "core:os"
 import "core:fmt"
@@ -10,6 +11,7 @@ import "core:crypto/aead"
 import "core:encoding/endian"
 import "core:slice"
 import "core:strings"
+import "core:time"
 
 
 PasswordAlgo :: enum u16 {
@@ -46,7 +48,8 @@ algo_from_algo :: proc(algo: aeadAlgo) -> aead.Algorithm {
     return .AES_GCM_256
 }
 
-Vault :: struct {                                   // size offset  alignment
+Vault :: struct {   
+    locked: b64,                                    // size offset  alignment
     magic_bytes:    [8]u8,                          // 8    0       1
     version:        [4]u16,                         // 8    8       2
     password_algo:  PasswordAlgo,                   // 2    16      2
@@ -56,8 +59,8 @@ Vault :: struct {                                   // size offset  alignment
     aead_tag:       [64]u8,                         // 64   52      1
     aead_iv:        [32]u8,                         // 32   116     1
     aead_aad:       [64]u8,                         // 64   148     1
-    reserved:       [808]u8,                        // 808  212     1
-    number_of_entries: u32,                         // 4    1020    4
+    reserved:       [800]u8,                        // 800  212     1
+    number_of_entries: u32,                         // 4    1024    4
     entries:        [MAX_ENTRIES]Entry,                  // big  1024    256        
 }
 
@@ -69,17 +72,20 @@ PASSWORD_HASH_SIZE :: 32
 IV_SIZE :: 12
 
 Entry :: struct {
-    record: [256]u8,
+    id: [256]u8,
     username: [256]u8,
     password: [256]u8,
     note: [256]u8,
 }
+
+NullEntry :: Entry{0,0,0,0}
 
 Status :: enum {
     Success,
     Failure,
     Too_Long_Password,
 }
+
 
 hash_password :: proc(password: string, hash_params: ^argon2id.Parameters, salt: []u8) -> ([32]u8, Status) {
     password_hash : [32]u8
@@ -157,11 +163,82 @@ lock_vault :: proc(password: string, vault: ^Vault) -> Status {
 
 }
 
+random_bytes :: proc($N: int) -> [N]u8 {
+    bytes : [N]u8
+    crypto.rand_bytes(bytes[:])
+    return bytes
+}
+
 make_new_vault :: proc() -> ^Vault {
     vault: ^Vault = new(Vault, context.allocator)
+    vault.locked = false
     vault.magic_bytes = {'E', 'Z', 'P', 'A', 'S', 'S', 'M', 'N'}
-    
+    vault.version = {0,0,0,0}
+    vault.password_algo = .argon2id
+    vault.aead_algo = .AES_GCM_256
+    vault.password_salt = random_bytes(16)
+    vault.password_hasher_params = argon2id.PARAMS_OWASP
+    vault.aead_tag = 0
+    vault.aead_iv = random_bytes(32)
+    // vault.aead_aad = 
+    // vault.reserved = 
+    vault.number_of_entries = 0
+    // vault.entries = 
 
+    return vault
+}
+
+
+read_entry :: proc(vault: ^Vault, id: [256]u8) -> (int, Maybe(Entry)) {
+    result := NullEntry
+    num_found := 0
+    index := -1
+    for i in 0..<int(vault.number_of_entries) {
+        if vault.entries[i].id == id {
+            result = vault.entries[i]
+            index = i
+            num_found += 1
+        }
+    }
+    assert(num_found < 2)
+
+    if num_found == 0 {
+        return index, nil
+    } else {
+        return index, result
+    }
+}
+
+add_entry :: proc(vault: ^Vault, entry: Entry) -> Status {
+    index, old_entry := read_entry(vault, entry.id)
+    if old_entry == nil {
+        vault.entries[vault.number_of_entries] = entry
+        vault.number_of_entries += 1
+        return .Success
+    } else {
+        return .Failure
+    }
+}
+
+update_entry :: proc(vault: ^Vault, new_entry: Entry) -> Status {
+    index, old_entry := read_entry(vault, new_entry.id)
+    if old_entry == nil {
+        return .Failure
+    } else {
+        vault.entries[index] = new_entry
+        return .Success
+    }
+}
+
+delete_entry :: proc(vault: ^Vault, id: [256]u8) -> Status {
+    index, _ := read_entry(vault, id)
+    if index < 0 {
+        return .Failure
+    } else {
+        vault.entries[index] = vault.entries[vault.number_of_entries]
+        vault.entries[vault.number_of_entries] = NullEntry
+        return .Success
+    }
 }
 
 main :: proc() {
