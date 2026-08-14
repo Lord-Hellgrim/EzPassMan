@@ -1,41 +1,3 @@
-/*
-EZPASSMAN VAULT FORMAT
-
--------------
-all numbers left endian unless otherwise specified
-HEADER
-Byte 0  :   32  -> The bytes {0x45, 0x5A, 0x50, 0x4D}. Any file that does not start with these bytes will be deemed invalid
-Byte 32 :   48  -> The version id as 4x u16 [major_version, minor_version, year, reserved byte]
-Byte 48 :   64  -> Algorithms used in sealing this vault identified by two 16 bit numbers [password_hash, aead]
-                    Password hashing algorithms
-                        0x00 = Argon2id
-                    aead algorithms
-                        0x00 = ChaChaPoly1305
-Byte 64 :   96  -> Password hash salt (latter bits zero in case of shorter than 16 byte salt)
-Byte 96 :   112 -> Password hashing algorithm parameters as 32 bit numbers (memory_size, passes, paralellism, reserved)   
-Byte 112:   176 -> aead tag (latter bytes zeroed in case of shorter than 64 byte tag)
-Byte 176:   192 -> aead iv (latter bytes zeroed in case of iv less than 16 bytes)
-Byte 192:   256 -> aead ad
-Byte 256:   512 -> Reserved
-
-BODY
-Byte 512: 516   -> Number of occupied entries as a u32
-Byte 516: end   -> 10.000 Entry structs, the first [number of occupied entries] of which are meaningful while the rest are "empty". 
-                    Each struct is four length prefixed utf-8 strings (one byte length)
-                    with a maximum byte size listed below (first byte is length of string).
-                    Number of entries determined by version.
-                    Current version [0,0,2026]: 10.000 entries
-                    Entry struct {
-                        256 byte entry_id string (website name, f.x)
-                        256 byte username
-                        256 byte password
-                        256 byte note
-                    }
--------------
-*/
-
-
-
 package EzPassMan
 
 
@@ -47,6 +9,58 @@ import "core:crypto/aead"
 
 import "core:encoding/endian"
 import "core:slice"
+import "core:strings"
+
+
+PasswordAlgo :: enum u16 {
+    argon2id,
+}
+
+aeadAlgo :: enum u16 {
+	AES_GCM_128,
+	AES_GCM_192,
+	AES_GCM_256,
+	CHACHA20POLY1305,
+	XCHACHA20POLY1305,
+	AEGIS_128L,
+	AEGIS_128L_256, // AEGIS-128L (256-bit tag)
+	AEGIS_256,
+	AEGIS_256_256, // AEGIS-256 (256-bit tag)
+	DEOXYS_II_256,
+}
+
+algo_from_algo :: proc(algo: aeadAlgo) -> aead.Algorithm {
+    switch algo {
+        case .AES_GCM_128: {return .AES_GCM_128}
+        case .AES_GCM_192: {return .AES_GCM_192}
+        case .AES_GCM_256: {return .AES_GCM_256}
+        case .CHACHA20POLY1305: {return .CHACHA20POLY1305}
+        case .XCHACHA20POLY1305: {return .XCHACHA20POLY1305}
+        case .AEGIS_128L: {return .AEGIS_128L}
+        case .AEGIS_128L_256: {return .AEGIS_128L_256}
+        case .AEGIS_256: {return .AEGIS_256}
+        case .AEGIS_256_256:{return .AEGIS_256_256}
+        case .DEOXYS_II_256: {return .DEOXYS_II_256}
+    }
+
+    return .AES_GCM_256
+}
+
+Vault :: struct {                                   // size offset  alignment
+    magic_bytes:    [8]u8,                          // 8    0       1
+    version:        [4]u16,                         // 8    8       2
+    password_algo:  PasswordAlgo,                   // 2    16      2
+    aead_algo:      aeadAlgo,                       // 2    18      2
+    password_salt:  [16]u8,                         // 16   20      1
+    password_hasher_params: argon2id.Parameters,    // 16   36      4
+    aead_tag:       [64]u8,                         // 64   52      1
+    aead_iv:        [32]u8,                         // 32   116     1
+    aead_aad:       [64]u8,                         // 64   148     1
+    reserved:       [808]u8,                        // 808  212     1
+    number_of_entries: u32,                         // 4    1020    4
+    entries:        [MAX_ENTRIES]Entry,                  // big  1024    256        
+}
+
 
 MAX_ENTRIES :: 10_000
 SALT_SIZE :: 16
@@ -64,6 +78,7 @@ Entry :: struct {
 Status :: enum {
     Success,
     Failure,
+    Too_Long_Password,
 }
 
 validate_blob :: proc(blob: []u8) -> bool {
@@ -71,80 +86,45 @@ validate_blob :: proc(blob: []u8) -> bool {
     return true
 }
 
-VaultParams :: struct {
-    pass_hash_params: argon2id.Parameters,
-    salt: [SALT_SIZE]u8,
-    tag: [TAG_SIZE]u8,
-    iv: [IV_SIZE]u8,
-    ad: [256]u8
-}
+// The Vault pointer points to the same bytes as the vault_file. Make sure you don't free the vault_file.
+open_vault :: proc(password: string, vault_file: []u8) -> (^Vault, Status) {
 
-read_params :: proc(encrypted_bloc: []u8) -> (VaultParams, Status) {
+    vault_file := vault_file
 
-    params : VaultParams
-
-    blob_is_valid := validate_blob(encrypted_bloc)
-    if !blob_is_valid {
-        return params, .Failure
+    if len(password) > 255 {
+        return nil, .Too_Long_Password
     }
+    vault: ^Vault
+    vault = transmute(^Vault)raw_data(vault_file)
 
-    params.pass_hash_params.memory_size, _ = endian.get_u32(encrypted_bloc[96:100], .Little)
-    params.pass_hash_params.passes, _ = endian.get_u32(encrypted_bloc[100:104], .Little)
-    params.pass_hash_params.parallelism, _ = endian.get_u32(encrypted_bloc[104:108], .Little)
-
-    copy(params.salt[:], encrypted_bloc[64:64 + SALT_SIZE])
-
-    copy(params.tag[:], encrypted_bloc[112:112 + TAG_SIZE])
-
-    copy(params.iv[:], encrypted_bloc[176:176 + IV_SIZE])
-
-    copy(params.ad[:], encrypted_bloc[192:256])
-
-    return params, .Success
-}
-
-// The lifetime of the vault_file must outlive the Vault struct since the Vault struct holds pointers into the Vault
-open_vault :: proc(password: string, vault_file: []u8) -> ([dynamic]Entry, Status) {
-    
-    hash_params, _ := read_params(vault_file)
-
-    password_hash : [PASSWORD_HASH_SIZE]u8
+    encrypted_entries := slice.to_bytes(vault.entries[:])
+    password_hash : [32]u8
+    password_bytes : [256]u8
+    copy(password_bytes[:len(password)], password)
     alloc_error := argon2id.derive(
-        &hash_params.pass_hash_params, 
-        transmute([]u8)password[:], 
-        hash_params.salt[:], 
-        password_hash[:], 
-        ad = hash_params.ad[:],
+        &vault.password_hasher_params, 
+        password_bytes[:len(password)], 
+        vault.password_salt[:], 
+        password_hash[:]
     )
-    
+
     if alloc_error != .None {
         return nil, .Failure
     }
 
-    decryption_failed := aead.open_oneshot(
-        .CHACHA20POLY1305, 
-        vault_file[512:], 
-        password_hash[0:aead.KEY_SIZES[.CHACHA20POLY1305]], 
-        hash_params.iv[0:aead.IV_SIZES[.CHACHA20POLY1305]],
-        hash_params.ad[:],
-        vault_file[512:],
-        hash_params.tag[:]
+    ctx : aead.Context
+    aead_algo := algo_from_algo(vault.aead_algo)
+    aead.open_oneshot(
+        aead_algo, 
+        encrypted_entries, 
+        password_hash[:aead.KEY_SIZES[aead_algo]], 
+        vault.aead_iv[:aead.IV_SIZES[aead_algo]],
+        vault.aead_aad[:],
+        encrypted_entries,
+        vault.aead_tag[:],
     )
 
-    if decryption_failed {
-        return nil, .Failure
-    }
 
-    number_of_entries, _ := endian.get_u32(vault_file[512:516], .Little)
-    if number_of_entries >= 10_000 {
-        return nil, .Failure
-    }
-
-    vault := slice.into_dynamic(transmute([]Entry)vault_file[516:])
-    resize(&vault, number_of_entries)
-
-    return vault, .Success
-    
 }
 
 main :: proc() {
