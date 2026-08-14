@@ -81,40 +81,44 @@ Status :: enum {
     Too_Long_Password,
 }
 
+hash_password :: proc(password: string, hash_params: ^argon2id.Parameters, salt: []u8) -> ([32]u8, Status) {
+    password_hash : [32]u8
+    password_bytes : [256]u8
+    copy(password_bytes[:len(password)], password)
+    alloc_error := argon2id.derive(
+        hash_params, 
+        password_bytes[:len(password)], 
+        salt[:], 
+        password_hash[:]
+    )
+
+    if alloc_error != .None {
+        return 0, .Failure
+    }
+
+    return password_hash, .Success
+}
+
 validate_blob :: proc(blob: []u8) -> bool {
     // TODO
     return true
 }
 
 // The Vault pointer points to the same bytes as the vault_file. Make sure you don't free the vault_file.
-open_vault :: proc(password: string, vault_file: []u8) -> (^Vault, Status) {
-
-    vault_file := vault_file
-
+open_vault :: proc(vault: ^Vault, password: string) -> (Status) {
     if len(password) > 255 {
-        return nil, .Too_Long_Password
+        return .Too_Long_Password
     }
-    vault: ^Vault
-    vault = transmute(^Vault)raw_data(vault_file)
 
     encrypted_entries := slice.to_bytes(vault.entries[:])
-    password_hash : [32]u8
-    password_bytes : [256]u8
-    copy(password_bytes[:len(password)], password)
-    alloc_error := argon2id.derive(
-        &vault.password_hasher_params, 
-        password_bytes[:len(password)], 
-        vault.password_salt[:], 
-        password_hash[:]
-    )
-
-    if alloc_error != .None {
-        return nil, .Failure
+    password_hash, pass_hash_status := hash_password(password, &vault.password_hasher_params, vault.password_salt[:])
+    if pass_hash_status != .Success {
+        return .Failure
     }
 
     ctx : aead.Context
     aead_algo := algo_from_algo(vault.aead_algo)
-    aead.open_oneshot(
+    opened_successfully := aead.open_oneshot(
         aead_algo, 
         encrypted_entries, 
         password_hash[:aead.KEY_SIZES[aead_algo]], 
@@ -124,6 +128,32 @@ open_vault :: proc(password: string, vault_file: []u8) -> (^Vault, Status) {
         vault.aead_tag[:],
     )
 
+    if opened_successfully == false {
+        return .Failure
+    }
+
+    return .Success
+}
+
+lock_vault :: proc(password: string, vault: ^Vault) -> Status {
+    password_hash, pass_hash_status := hash_password(password, &vault.password_hasher_params, vault.password_salt[:])
+    if pass_hash_status != .Success {
+        return .Failure
+    }
+
+    vault_entries_bytes := slice.to_bytes(vault.entries[:])
+    algo := algo_from_algo(vault.aead_algo)
+    aead.seal_oneshot(
+        algo, 
+        vault_entries_bytes, 
+        vault.aead_tag[:aead.TAG_SIZES[algo]], 
+        password_hash[:aead.KEY_SIZES[algo]], 
+        vault.aead_iv[:aead.IV_SIZES[algo]],
+        vault.aead_aad[:],
+        vault_entries_bytes,
+    )
+
+    return .Success
 
 }
 
