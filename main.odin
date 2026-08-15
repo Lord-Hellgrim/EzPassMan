@@ -3,15 +3,11 @@ package EzPassMan
 import "core:crypto"
 
 import "core:os"
-import "core:fmt"
-import "core:time"
 import "core:crypto/argon2id"
 import "core:crypto/aead"
-
-import "core:encoding/endian"
 import "core:slice"
-import "core:strings"
-import "core:time"
+
+import ss "smallstrings"
 
 
 PasswordAlgo :: enum u16 {
@@ -71,14 +67,21 @@ TAG_SIZE :: 32
 PASSWORD_HASH_SIZE :: 32
 IV_SIZE :: 12
 
+EzString :: ss.SmallString(255)
+
 Entry :: struct {
-    id: [256]u8,
-    username: [256]u8,
-    password: [256]u8,
-    note: [256]u8,
+    id: EzString,
+    username: EzString,
+    password: EzString,
+    note: EzString,
 }
 
-NullEntry :: Entry{0,0,0,0}
+NullEntry :: Entry{
+    id = EzString{len = 0, data = 0},
+    username = EzString{len = 0, data = 0},
+    password = EzString{len = 0, data = 0},
+    note = EzString{len = 0, data = 0},
+}
 
 Status :: enum {
     Success,
@@ -189,7 +192,7 @@ make_new_vault :: proc() -> ^Vault {
 }
 
 
-read_entry :: proc(vault: ^Vault, id: [256]u8) -> (int, Maybe(Entry)) {
+read_entry :: proc(vault: ^Vault, id: EzString) -> (int, Maybe(Entry)) {
     result := NullEntry
     num_found := 0
     index := -1
@@ -230,7 +233,7 @@ update_entry :: proc(vault: ^Vault, new_entry: Entry) -> Status {
     }
 }
 
-delete_entry :: proc(vault: ^Vault, id: [256]u8) -> Status {
+delete_entry :: proc(vault: ^Vault, id: EzString) -> Status {
     index, _ := read_entry(vault, id)
     if index < 0 {
         return .Failure
