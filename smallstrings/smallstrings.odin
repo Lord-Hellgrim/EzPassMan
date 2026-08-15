@@ -3,6 +3,7 @@ package smallstrings
 
 import "core:slice"
 import "core:strings"
+import "core:fmt"
 
 
 SmallString :: struct($N: u8) {
@@ -41,4 +42,11 @@ equal :: proc(a: SmallString($N), b: SmallString($M)) -> bool {
 // returns a view of the data section of the SmallString. Does not copy
 as_string :: proc(s: SmallString($N)) -> string {
     return transmute(string)runtime.Raw_String{&s.data[0], s.len}
+}
+
+// Copies the bytes in s to the return value
+string_to_smallstring :: proc(s: string, $N: u8) -> SmallString(N) {
+    result : SmallString(N)
+    m := min(s.len, N)
+    copy(result[:min], s)
 }

@@ -67,6 +67,16 @@ TAG_SIZE :: 32
 PASSWORD_HASH_SIZE :: 32
 IV_SIZE :: 12
 
+AAD : [64]u8 : {
+    0x45,0x6E,0x63,0x72,0x79,0x70,0x74,0x65,0x64,0x20,
+    0x62,0x79,0x20,0x76,0x65,0x72,0x73,0x69,0x6F,0x6E,
+    0x20,0x78,0x78,0x2E,0x78,0x78,0x2E,0x78,0x78,0x2E,
+    0x78,0x78,0x20,0x6F,0x66,0x20,0x45,0x7A,0x50,0x61,
+    0x73,0x73,0x4D,0x61,0x6E,0x2E,0x00,0x00,0x00,0x00,
+    0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,
+    0x00,0x00,0x00,0x00,
+}
+
 EzString :: ss.SmallString(255)
 
 Entry :: struct {
@@ -108,9 +118,25 @@ hash_password :: proc(password: string, hash_params: ^argon2id.Parameters, salt:
     return password_hash, .Success
 }
 
-validate_blob :: proc(blob: []u8) -> bool {
-    // TODO
+blob_is_valid :: proc(blob: []u8) -> bool {
+
+    magic_bytes: [8]u8 = {'E', 'Z', 'P', 'A', 'S', 'S', 'M', 'N'}
+    
+    if len(blob) != size_of(Vault) {
+        return false
+    } else if !slice.equal(blob[8:16], magic_bytes[:]) {
+        return false
+    }
+
     return true
+}
+
+blob_to_vault :: proc(blob: []u8) -> (^Vault, Status) {
+    if blob_is_valid(blob) {
+        return cast(^Vault)(&blob[0]), .Success
+    } else {
+        return nil, .Failure
+    }
 }
 
 // The Vault pointer points to the same bytes as the vault_file. Make sure you don't free the vault_file.
@@ -183,7 +209,7 @@ make_new_vault :: proc() -> ^Vault {
     vault.password_hasher_params = argon2id.PARAMS_OWASP
     vault.aead_tag = 0
     vault.aead_iv = random_bytes(32)
-    // vault.aead_aad = 
+    vault.aead_aad = AAD
     // vault.reserved = 
     vault.number_of_entries = 0
     // vault.entries = 
@@ -259,5 +285,7 @@ main :: proc() {
         working_dir = "./vault",
         command = {"git", "push"},
     }
+
+    test_vault := make_new_vault()
 
 }
