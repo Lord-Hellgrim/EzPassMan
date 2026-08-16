@@ -7,6 +7,8 @@ import "core:crypto/argon2id"
 import "core:crypto/aead"
 import "core:slice"
 
+import "core:fmt"
+
 import ss "smallstrings"
 
 
@@ -45,19 +47,19 @@ algo_from_algo :: proc(algo: aeadAlgo) -> aead.Algorithm {
 }
 
 Vault :: struct {   
-    locked: b64,                                    // size offset  alignment
-    magic_bytes:    [8]u8,                          // 8    0       1
-    version:        [4]u16,                         // 8    8       2
-    password_algo:  PasswordAlgo,                   // 2    16      2
-    aead_algo:      aeadAlgo,                       // 2    18      2
-    password_salt:  [16]u8,                         // 16   20      1
-    password_hasher_params: argon2id.Parameters,    // 16   36      4
-    aead_tag:       [64]u8,                         // 64   52      1
-    aead_iv:        [32]u8,                         // 32   116     1
-    aead_aad:       [64]u8,                         // 64   148     1
-    reserved:       [800]u8,                        // 800  212     1
-    number_of_entries: u32,                         // 4    1024    4
-    entries:        [MAX_ENTRIES]Entry,                  // big  1024    256        
+    locked: b64,                                    
+    magic_bytes:    [8]u8,                          
+    version:        [4]u16,                         
+    password_algo:  PasswordAlgo,                   
+    aead_algo:      aeadAlgo,                       
+    password_salt:  [16]u8,                         
+    password_hasher_params: argon2id.Parameters,    
+    aead_tag:       [64]u8,                         
+    aead_iv:        [32]u8,                         
+    aead_aad:       [64]u8,                         
+    reserved:       [800]u8,                        
+    number_of_entries: u32,                         
+    entries:        [MAX_ENTRIES]Entry,                     
 }
 
 
@@ -93,12 +95,21 @@ NullEntry :: Entry{
     note = EzString{len = 0, data = 0},
 }
 
+print_entry :: proc(entry: ^Entry) {
+    fmt.println(ss.as_string(&entry.id))
+    fmt.print("\t")
+    fmt.println(ss.as_string(&entry.username))
+    fmt.print("\t")
+    fmt.println(ss.as_string(&entry.password))
+    fmt.print("\t")
+    fmt.println(ss.as_string(&entry.note))
+}
+
 Status :: enum {
     Success,
     Failure,
     Too_Long_Password,
 }
-
 
 hash_password :: proc(password: string, hash_params: ^argon2id.Parameters, salt: []u8) -> ([32]u8, Status) {
     password_hash : [32]u8
@@ -218,7 +229,7 @@ make_new_vault :: proc() -> ^Vault {
 }
 
 
-read_entry :: proc(vault: ^Vault, id: EzString) -> (int, Maybe(Entry)) {
+read_entry :: proc(vault: ^Vault, id: EzString) -> (Entry, int) {
     result := NullEntry
     num_found := 0
     index := -1
@@ -232,15 +243,15 @@ read_entry :: proc(vault: ^Vault, id: EzString) -> (int, Maybe(Entry)) {
     assert(num_found < 2)
 
     if num_found == 0 {
-        return index, nil
+        return NullEntry, index
     } else {
-        return index, result
+        return result, index
     }
 }
 
 add_entry :: proc(vault: ^Vault, entry: Entry) -> Status {
-    index, old_entry := read_entry(vault, entry.id)
-    if old_entry == nil {
+    old_entry, index := read_entry(vault, entry.id)
+    if old_entry == NullEntry {
         vault.entries[vault.number_of_entries] = entry
         vault.number_of_entries += 1
         return .Success
@@ -250,8 +261,8 @@ add_entry :: proc(vault: ^Vault, entry: Entry) -> Status {
 }
 
 update_entry :: proc(vault: ^Vault, new_entry: Entry) -> Status {
-    index, old_entry := read_entry(vault, new_entry.id)
-    if old_entry == nil {
+    old_entry, index := read_entry(vault, new_entry.id)
+    if old_entry == NullEntry {
         return .Failure
     } else {
         vault.entries[index] = new_entry
@@ -260,7 +271,7 @@ update_entry :: proc(vault: ^Vault, new_entry: Entry) -> Status {
 }
 
 delete_entry :: proc(vault: ^Vault, id: EzString) -> Status {
-    index, _ := read_entry(vault, id)
+    _, index := read_entry(vault, id)
     if index < 0 {
         return .Failure
     } else {
@@ -287,5 +298,18 @@ main :: proc() {
     }
 
     test_vault := make_new_vault()
+
+    add_entry(
+        test_vault, 
+        Entry{
+            id = ss.from_string("test account", 255), 
+            username = ss.from_string("test username", 255), 
+            password = ss.from_string("1234", 255), 
+            note = ss.from_string("This is a note", 255), 
+        }
+    )
+
+    test_entry, _ := read_entry(test_vault, ss.from_string("test account", 255))
+    print_entry(&test_entry)
 
 }

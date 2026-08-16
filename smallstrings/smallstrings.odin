@@ -40,13 +40,14 @@ equal :: proc(a: SmallString($N), b: SmallString($M)) -> bool {
 }
 
 // returns a view of the data section of the SmallString. Does not copy
-as_string :: proc(s: SmallString($N)) -> string {
-    return transmute(string)runtime.Raw_String{&s.data[0], s.len}
+as_string :: proc(s: ^SmallString($N)) -> string {
+    return strings.string_from_ptr(&s.data[0], int(s.len))
 }
 
-// Copies the bytes in s to the return value
-string_to_smallstring :: proc(s: string, $N: u8) -> SmallString(N) {
+// Makes a new SmallString by copying the bytes in s.
+from_string :: proc(s: string, $N: u8) -> SmallString(N) {
     result : SmallString(N)
-    m := min(s.len, N)
-    copy(result[:min], s)
+    m := min(len(s), int(N))
+    copy_from_string(result.data[:m], s)
+    return result
 }
