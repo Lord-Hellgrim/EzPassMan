@@ -62,6 +62,30 @@ Vault :: struct {
     entries:        [MAX_ENTRIES]Entry,                     
 }
 
+print_vault :: proc(vault: ^Vault) {
+    fmt.println("vault.locked: ", vault.locked)
+    fmt.println("vault.magic_bytes: ", vault.magic_bytes)
+    fmt.println("vault.version: ", vault.version)
+    fmt.println("vault.password_algo: ", vault.password_algo)
+    fmt.println("vault.aead_algo: ", vault.aead_algo)
+    fmt.println("vault.password_salt: ", vault.password_salt)
+    fmt.println("vault.password_hasher_params: ", vault.password_hasher_params)
+    fmt.println("vault.aead_tag: ", vault.aead_tag)
+    fmt.println("vault.aead_iv: ", vault.aead_iv)
+    fmt.println("vault.aead_aad: ", vault.aead_aad)
+    fmt.println("vault.number_of_entries: ", vault.number_of_entries)
+
+    fmt.println("------------ENTRIES--------------")
+    
+    for &entry in vault.entries[:vault.number_of_entries] {
+        print_entry(&entry)
+    }
+
+    fmt.println("---------------------------------")
+
+
+}
+
 
 MAX_ENTRIES :: 10_000
 SALT_SIZE :: 16
@@ -309,7 +333,16 @@ main :: proc() {
         }
     )
 
-    test_entry, _ := read_entry(test_vault, ss.from_string("test account", 255))
-    print_entry(&test_entry)
+    add_entry(
+        test_vault, 
+        Entry{
+            id = ss.from_string("new account", 255), 
+            username = ss.from_string("test username", 255), 
+            password = ss.from_string("1234", 255), 
+            note = ss.from_string("This is a note", 255), 
+        }
+    )
+
+    print_vault(test_vault)
 
 }

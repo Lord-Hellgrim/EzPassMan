@@ -41,7 +41,8 @@ equal :: proc(a: SmallString($N), b: SmallString($M)) -> bool {
 
 // returns a view of the data section of the SmallString. Does not copy
 as_string :: proc(s: ^SmallString($N)) -> string {
-    return strings.string_from_ptr(&s.data[0], int(s.len))
+    result := strings.string_from_ptr(&(s.data[0]), int(s.len))
+    return result
 }
 
 // Makes a new SmallString by copying the bytes in s.
@@ -49,5 +50,6 @@ from_string :: proc(s: string, $N: u8) -> SmallString(N) {
     result : SmallString(N)
     m := min(len(s), int(N))
     copy_from_string(result.data[:m], s)
+    result.len = u8(m)
     return result
 }
