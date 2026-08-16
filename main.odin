@@ -63,6 +63,8 @@ Vault :: struct {
 }
 
 print_vault :: proc(vault: ^Vault) {
+    
+    
     fmt.println("vault.locked: ", vault.locked)
     fmt.println("vault.magic_bytes: ", vault.magic_bytes)
     fmt.println("vault.version: ", vault.version)
@@ -74,11 +76,16 @@ print_vault :: proc(vault: ^Vault) {
     fmt.println("vault.aead_iv: ", vault.aead_iv)
     fmt.println("vault.aead_aad: ", vault.aead_aad)
     fmt.println("vault.number_of_entries: ", vault.number_of_entries)
-
+    
     fmt.println("------------ENTRIES--------------")
     
-    for &entry in vault.entries[:vault.number_of_entries] {
-        print_entry(&entry)
+    if vault.locked {
+        fmt.println("Vault is locked\nNo entries can be printed")
+    } else {
+        for &entry in vault.entries[:vault.number_of_entries] {
+            print_entry(&entry)
+        }
+
     }
 
     fmt.println("---------------------------------")
@@ -195,17 +202,19 @@ open_vault :: proc(vault: ^Vault, password: string) -> (Status) {
         vault.aead_iv[:aead.IV_SIZES[aead_algo]],
         vault.aead_aad[:],
         encrypted_entries,
-        vault.aead_tag[:],
+        vault.aead_tag[:aead.TAG_SIZES[aead_algo]],
     )
 
     if opened_successfully == false {
         return .Failure
     }
 
+    vault.locked = false
+
     return .Success
 }
 
-lock_vault :: proc(password: string, vault: ^Vault) -> Status {
+lock_vault :: proc(vault: ^Vault, password: string) -> Status {
     password_hash, pass_hash_status := hash_password(password, &vault.password_hasher_params, vault.password_salt[:])
     if pass_hash_status != .Success {
         return .Failure
@@ -222,6 +231,8 @@ lock_vault :: proc(password: string, vault: ^Vault) -> Status {
         vault.aead_aad[:],
         vault_entries_bytes,
     )
+
+    vault.locked = true
 
     return .Success
 
@@ -254,6 +265,9 @@ make_new_vault :: proc() -> ^Vault {
 
 
 read_entry :: proc(vault: ^Vault, id: EzString) -> (Entry, int) {
+    if vault.locked {
+        return NullEntry, -1
+    }
     result := NullEntry
     num_found := 0
     index := -1
@@ -274,6 +288,9 @@ read_entry :: proc(vault: ^Vault, id: EzString) -> (Entry, int) {
 }
 
 add_entry :: proc(vault: ^Vault, entry: Entry) -> Status {
+    if vault.locked {
+        return .Failure
+    }
     old_entry, index := read_entry(vault, entry.id)
     if old_entry == NullEntry {
         vault.entries[vault.number_of_entries] = entry
@@ -285,6 +302,9 @@ add_entry :: proc(vault: ^Vault, entry: Entry) -> Status {
 }
 
 update_entry :: proc(vault: ^Vault, new_entry: Entry) -> Status {
+    if vault.locked {
+        return .Failure
+    }
     old_entry, index := read_entry(vault, new_entry.id)
     if old_entry == NullEntry {
         return .Failure
@@ -295,6 +315,9 @@ update_entry :: proc(vault: ^Vault, new_entry: Entry) -> Status {
 }
 
 delete_entry :: proc(vault: ^Vault, id: EzString) -> Status {
+    if vault.locked {
+        return .Failure
+    }
     _, index := read_entry(vault, id)
     if index < 0 {
         return .Failure
@@ -342,6 +365,12 @@ main :: proc() {
             note = ss.from_string("This is a note", 255), 
         }
     )
+
+    lock_vault(test_vault, "1234")
+
+    print_vault(test_vault)
+
+    open_vault(test_vault, "1234")
 
     print_vault(test_vault)
 
