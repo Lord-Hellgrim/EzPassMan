@@ -64,7 +64,6 @@ Vault :: struct {
 
 print_vault :: proc(vault: ^Vault) {
     
-    
     fmt.println("vault.locked: ", vault.locked)
     fmt.println("vault.magic_bytes: ", vault.magic_bytes)
     fmt.println("vault.version: ", vault.version)
@@ -89,8 +88,6 @@ print_vault :: proc(vault: ^Vault) {
     }
 
     fmt.println("---------------------------------")
-
-
 }
 
 
@@ -370,8 +367,11 @@ main :: proc() {
 
     print_vault(test_vault)
 
-    open_vault(test_vault, "1234")
+    open_vault(test_vault, "4321")
 
     print_vault(test_vault)
+
+    open_vault(test_vault, "4321")
+
 
 }
