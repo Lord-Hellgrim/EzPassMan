@@ -136,6 +136,7 @@ print_entry :: proc(entry: ^Entry) {
 Status :: enum {
     Success,
     Failure,
+    Wrong_Password,
     Too_Long_Password,
 }
 
@@ -178,37 +179,49 @@ blob_to_vault :: proc(blob: []u8) -> (^Vault, Status) {
     }
 }
 
-// The Vault pointer points to the same bytes as the vault_file. Make sure you don't free the vault_file.
-open_vault :: proc(vault: ^Vault, password: string) -> (Status) {
+
+open_vault :: proc(vault: ^Vault, password: string) -> (^Vault, Status) {
     if len(password) > 255 {
-        return .Too_Long_Password
+        return nil, .Too_Long_Password
     }
+
+    if !vault.locked {
+        return nil, .Failure
+    }
+
+    new_vault := new(Vault)
+    new_vault^ = vault^
 
     encrypted_entries := slice.to_bytes(vault.entries[:])
     password_hash, pass_hash_status := hash_password(password, &vault.password_hasher_params, vault.password_salt[:])
     if pass_hash_status != .Success {
-        return .Failure
+        return nil, .Failure
     }
+
+    entry_buffer := slice.to_bytes(new_vault.entries[:])
 
     ctx : aead.Context
     aead_algo := algo_from_algo(vault.aead_algo)
     opened_successfully := aead.open_oneshot(
         aead_algo, 
-        encrypted_entries, 
+        entry_buffer, 
         password_hash[:aead.KEY_SIZES[aead_algo]], 
-        vault.aead_iv[:aead.IV_SIZES[aead_algo]],
-        vault.aead_aad[:],
+        new_vault.aead_iv[:aead.IV_SIZES[aead_algo]],
+        new_vault.aead_aad[:],
         encrypted_entries,
-        vault.aead_tag[:aead.TAG_SIZES[aead_algo]],
+        new_vault.aead_tag[:aead.TAG_SIZES[aead_algo]],
     )
 
     if opened_successfully == false {
-        return .Failure
+        free(new_vault)
+        return nil, .Failure
+    } else {
+        free(vault)
+        new_vault.locked = false
+    
+        return new_vault, .Success
     }
 
-    vault.locked = false
-
-    return .Success
 }
 
 lock_vault :: proc(vault: ^Vault, password: string) -> Status {
@@ -367,11 +380,17 @@ main :: proc() {
 
     print_vault(test_vault)
 
-    open_vault(test_vault, "4321")
+    failed_vault, first_status := open_vault(test_vault, "4321")
+    fmt.println(first_status)
+    fmt.println()
 
     print_vault(test_vault)
 
-    open_vault(test_vault, "4321")
+    success_vault, second_status := open_vault(test_vault, "1234")
+    fmt.println(second_status)
+    fmt.println()
+
+    print_vault(success_vault)
 
 
 }
