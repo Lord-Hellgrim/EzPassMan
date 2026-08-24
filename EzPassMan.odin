@@ -6,7 +6,7 @@ import "core:os"
 import "core:crypto/argon2id"
 import "core:crypto/aead"
 import "core:slice"
-
+import "core:bufio"
 import "core:fmt"
 
 import ss "smallstrings"
@@ -62,20 +62,21 @@ Vault :: struct {
     entries:        [MAX_ENTRIES]Entry,                     
 }
 
-print_vault :: proc(vault: ^Vault) {
+print_vault :: proc(vault: ^Vault, verbose := true) {
     
-    fmt.println("vault.locked: ", vault.locked)
-    fmt.println("vault.magic_bytes: ", vault.magic_bytes)
-    fmt.println("vault.version: ", vault.version)
-    fmt.println("vault.password_algo: ", vault.password_algo)
-    fmt.println("vault.aead_algo: ", vault.aead_algo)
-    fmt.println("vault.password_salt: ", vault.password_salt)
-    fmt.println("vault.password_hasher_params: ", vault.password_hasher_params)
-    fmt.println("vault.aead_tag: ", vault.aead_tag)
-    fmt.println("vault.aead_iv: ", vault.aead_iv)
-    fmt.println("vault.aead_aad: ", vault.aead_aad)
-    fmt.println("vault.number_of_entries: ", vault.number_of_entries)
-    
+    if verbose == true {    
+            fmt.println("vault.locked: ", vault.locked)
+            fmt.println("vault.magic_bytes: ", vault.magic_bytes)
+            fmt.println("vault.version: ", vault.version)
+            fmt.println("vault.password_algo: ", vault.password_algo)
+            fmt.println("vault.aead_algo: ", vault.aead_algo)
+            fmt.println("vault.password_salt: ", vault.password_salt)
+            fmt.println("vault.password_hasher_params: ", vault.password_hasher_params)
+            fmt.println("vault.aead_tag: ", vault.aead_tag)
+            fmt.println("vault.aead_iv: ", vault.aead_iv)
+            fmt.println("vault.aead_aad: ", vault.aead_aad)
+            fmt.println("vault.number_of_entries: ", vault.number_of_entries)
+    }
     fmt.println("------------ENTRIES--------------")
     
     if vault.locked {
@@ -338,6 +339,39 @@ delete_entry :: proc(vault: ^Vault, id: EzString) -> Status {
     }
 }
 
+Command :: enum {
+    view_vault,
+    add_entry,
+    delete_entry,
+    update_entry,
+    generate_password,
+}
+
+AppState :: struct {
+    verbose_vault: bool,
+    current_command : Command,
+}
+
+print_options :: proc(state: AppState) {
+    switch state.current_command {
+        case .view_vault: {
+            fmt.println("Enter \"q\" to exit")
+        }
+        case .add_entry: {
+            fmt.println("Type entry id to add:")
+        }
+        case .delete_entry: {
+            fmt.println("Type entry id to DELETE (WARNING WARNING, irreversible action!!!):")
+        }
+        case .update_entry: {
+            fmt.println("Type entry id to update (WARNING WARNING, irreversible action!!!):")
+        }
+        case .generate_password: {
+            
+        }
+    }
+}
+
 main :: proc() {
     pull := os.Process_Desc{
         working_dir = "./vault",
@@ -378,19 +412,54 @@ main :: proc() {
 
     lock_vault(test_vault, "1234")
 
-    print_vault(test_vault)
+    app_state := AppState{
+        verbose_vault = false,
+        current_command = .view_vault
+    }
 
-    failed_vault, first_status := open_vault(test_vault, "4321")
-    fmt.println(first_status)
-    fmt.println()
+    switch app_state.current_command {
+        case .view_vault: {
+            print_vault(test_vault, verbose = app_state.verbose_vault)
+        }
+        case .add_entry: {
 
-    print_vault(test_vault)
+        }
+        case .delete_entry: {
 
-    success_vault, second_status := open_vault(test_vault, "1234")
-    fmt.println(second_status)
-    fmt.println()
+        }
+        case .update_entry: {
 
-    print_vault(success_vault)
+        }
+        case .generate_password: {
+
+        }
+    }
+
+    scanner: bufio.Scanner
+    stdin := os.to_stream(os.stdin)
+    bufio.scanner_init(&scanner, stdin, context.temp_allocator)
+
+    fmt.println("Current app state: \n-------------------")
+    fmt.println(app_state)
+    fmt.println("--------------------------")
+
+    for {
+        print_options(app_state)
+        fmt.printf("> ")
+        if !bufio.scan(&scanner) {
+            break
+        }
+        line := bufio.scanner_text(&scanner)
+        if line == "q" {break}
+        
+        fmt.println(line)
+    }
+
+    if err := bufio.scanner_error(&scanner); err != nil {
+        fmt.eprintln("error scanning input: %v", err)
+    }
+
+    free_all(context.temp_allocator)
 
 
 }
