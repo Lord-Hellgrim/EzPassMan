@@ -3,7 +3,6 @@ package smallstrings
 
 import "core:slice"
 import "core:strings"
-import "core:fmt"
 
 
 SmallString :: struct($N: u8) {
@@ -12,19 +11,20 @@ SmallString :: struct($N: u8) {
 }
 
 
-// Adds the first len bytes of to_add.data to dst.data. Bytes beyond the cap of dst are not copied.
-extend_in_place :: proc(dst: ^SmallString($N), to_add: SmallString($M)) {
+// Adds the first len bytes of src.data to dst.data. Bytes beyond the cap of dst are not copied.
+extend_in_place :: proc(dst: ^SmallString($N), src: SmallString($M)) {
 
-    num_chars := to_add.len
+    num_chars := src.len
     if num_chars > N - dst.len {
         status := .not_enough_space_for_all_chars
         num_chars = N-dst.len
     }
 
-    copy(dst[dst.len:], to_add[:num_chars])
+    copy(dst[dst.len:], src[:num_chars])
 
 }
 
+// Adds the first len bytes of src to dst.data. Bytes beyond the cap of dst are not copied.
 extend_with_string :: proc(dst: ^SmallString($N), src: string) {
     num_chars := len(src)
     if num_chars > N - dst.len {
