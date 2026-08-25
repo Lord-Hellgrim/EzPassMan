@@ -10,7 +10,7 @@ import "core:mem"
 import ss "smallstrings"
 
 
-MAX_ENTRIES :: 10_000
+MAX_ENTRIES :: 1_000
 SALT_SIZE :: 16
 TAG_SIZE :: 32
 PASSWORD_HASH_SIZE :: 32
