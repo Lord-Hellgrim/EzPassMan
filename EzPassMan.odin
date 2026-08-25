@@ -8,6 +8,13 @@ import "core:crypto/aead"
 import "core:slice"
 import "core:bufio"
 import "core:fmt"
+import "core:time"
+import "core:io"
+import "core:unicode/utf8"
+import "core:mem"
+
+import       "core:c/libc"
+import win32 "core:sys/windows"
 
 import ss "smallstrings"
 
@@ -62,7 +69,7 @@ Vault :: struct {
     entries:        [MAX_ENTRIES]Entry,                     
 }
 
-print_vault :: proc(vault: ^Vault, verbose := true) {
+print_vault :: proc(vault: ^Vault, verbose: bool) {
     
     if verbose == true {    
             fmt.println("vault.locked: ", vault.locked)
@@ -181,13 +188,13 @@ blob_to_vault :: proc(blob: []u8) -> (^Vault, Status) {
 }
 
 
-open_vault :: proc(vault: ^Vault, password: string) -> (^Vault, Status) {
+open_vault :: proc(vault: ^Vault, password: string) -> (Status) {
     if len(password) > 255 {
-        return nil, .Too_Long_Password
+        return .Too_Long_Password
     }
 
     if !vault.locked {
-        return nil, .Failure
+        return .Failure
     }
 
     new_vault := new(Vault)
@@ -196,7 +203,7 @@ open_vault :: proc(vault: ^Vault, password: string) -> (^Vault, Status) {
     encrypted_entries := slice.to_bytes(vault.entries[:])
     password_hash, pass_hash_status := hash_password(password, &vault.password_hasher_params, vault.password_salt[:])
     if pass_hash_status != .Success {
-        return nil, .Failure
+        return .Failure
     }
 
     entry_buffer := slice.to_bytes(new_vault.entries[:])
@@ -213,16 +220,22 @@ open_vault :: proc(vault: ^Vault, password: string) -> (^Vault, Status) {
         new_vault.aead_tag[:aead.TAG_SIZES[aead_algo]],
     )
 
+    
     if opened_successfully == false {
         free(new_vault)
-        return nil, .Failure
+        return .Failure
     } else {
-        free(vault)
-        new_vault.locked = false
-    
-        return new_vault, .Success
+        vault^ = new_vault^
+        vault.locked = false
+        destroy_vault(new_vault)
+        return .Success
     }
+}
 
+destroy_vault :: proc(vault: ^Vault) {
+    new_vault_bytes := slice.bytes_from_ptr(rawptr(vault), size_of(Vault))
+    slice.zero(new_vault_bytes)
+    free(vault)
 }
 
 lock_vault :: proc(vault: ^Vault, password: string) -> Status {
@@ -339,38 +352,240 @@ delete_entry :: proc(vault: ^Vault, id: EzString) -> Status {
     }
 }
 
+SubCommand :: enum {
+    id,
+    username,
+    password,
+    note,
+    generate,
+}
+
 Command :: enum {
+    start,
+    main_menu,
     view_vault,
     add_entry,
     delete_entry,
     update_entry,
-    generate_password,
+    entering_password,
 }
 
 AppState :: struct {
+    user_id: string,
     verbose_vault: bool,
-    current_command : Command,
+    command : Command,
+    subcommand: SubCommand,
+    help: bool,
+    vault_fetched: time.Time,
+    vault_synced: bool,
+    password: string,
 }
 
-print_options :: proc(state: AppState) {
-    switch state.current_command {
-        case .view_vault: {
-            fmt.println("Enter \"q\" to exit")
+get_latest_vault :: proc(current_vault: ^Vault, user_id: string) {
+    // make noise connection to server and fetch vault
+}
+
+upload_vault :: proc(current_vault: ^Vault, user_id: string) {
+
+}
+
+
+orig_mode: win32.DWORD
+
+enable_raw_mode :: proc() {
+		// Get a handle to the standard input.
+	stdin := win32.GetStdHandle(win32.STD_INPUT_HANDLE)
+	assert(stdin != win32.INVALID_HANDLE_VALUE)
+
+	// Get the original terminal mode.
+	ok := win32.GetConsoleMode(stdin, &orig_mode)
+	assert(ok == true)
+
+	// Reset to the original attributes at the end of the program.
+	libc.atexit(disable_raw_mode)
+
+	// Copy, and remove the
+	// ENABLE_ECHO_INPUT (so what is typed is not shown) and
+	// ENABLE_LINE_INPUT (so we get each input instead of an entire line at once) flags.
+	raw := orig_mode
+	raw &= ~win32.ENABLE_ECHO_INPUT
+	raw &= ~win32.ENABLE_LINE_INPUT
+	ok = win32.SetConsoleMode(stdin, raw)
+	assert(ok == true)
+}
+
+disable_raw_mode :: proc "c" () {
+    stdin := win32.GetStdHandle(win32.STD_INPUT_HANDLE)
+	assert_contextless(stdin != win32.INVALID_HANDLE_VALUE)
+
+	win32.SetConsoleMode(stdin, orig_mode)
+}
+
+get_password :: proc(allocator := context.allocator) -> string {
+
+	fmt.print("Enter password: ")
+
+    enable_raw_mode()
+    defer disable_raw_mode()
+
+	buf := make([dynamic]byte, allocator)
+	in_stream := os.to_stream(os.stdin)
+
+	for {
+		// Read a single character at a time.
+		ch, sz, err := io.read_rune(in_stream)
+		switch {
+		case err != nil:
+			fmt.eprintfln("\nError: %v", err)
+			os.exit(1)
+
+		// End line
+		case ch == '\n': // Posix
+			fallthrough
+		case ch == '\r': // Windows
+			fmt.println()
+			return string(buf[:])
+
+		// Backspace
+		case ch == '\u007f': // Posix
+			fallthrough
+		case ch == '\b':     // Windows
+			_, bs_sz := utf8.decode_last_rune(buf[:])	
+			if bs_sz > 0 {
+				resize(&buf, len(buf)-bs_sz)
+				// Replace last star with a space.
+				fmt.print("\b \b")
+			}
+		case:
+			bytes, _ := utf8.encode_rune(ch)
+			append(&buf, ..bytes[:sz])
+
+			fmt.print('*')
+		}
+	}
+}
+
+render_app :: proc(state: ^AppState, vault: ^Vault) {
+    if state.help {
+        fmt.println("fetch: Fetches the latest version of your vault from your current global backup")
+        fmt.println("Upload: Uploads current vault version to global backup")
+        fmt.println("open: Opens/decrypts the vault in memory. Will prompt you for a password")
+        fmt.println("lock: Locks/encrypts the vault in memory")
+        fmt.println("view: Prints the id's of all entries in the vault")
+        fmt.println("read [entry id]: Prints the entry username and copies the password to the clipboard")
+        fmt.println("add: Adds an entry via the \"Add Wizard\"")
+        fmt.println("update: Updates an entry via the \"Update Wizard\"")
+        fmt.println("delete: Deletes an entry. WARNING - IRREVERSIBLE ACTION!!")
+        fmt.println("help: Prints this message again")
+        fmt.println("verbose 0/1: Sets verbose explanations on (1) or off (0)")
+        fmt.println("quit: If you have made changes to the vault but not yet uploaded it, this command will print a warning.")
+        fmt.println("   otherwise, exits the program")
+        state.help = false
+        return
+    }
+    switch state.command {
+        case .start: {fmt.println("Please enter user id:")}
+        case .main_menu: {
+            fmt.println("Welcome to EzPassMan")
+            fmt.println("Current vault status: ")
+            if vault.locked {
+                fmt.println("   LOCKED")
+            } else {
+                fmt.println("   OPEN")
+            }
+            fmt.println("Current vault was fetched at: ", state.vault_fetched)
+            if state.vault_synced == true {
+                fmt.println("Current vault has not been changed")
+            } else {
+                fmt.println("There are unsynced changes to this local vault.\nClosing the program without syncing will cause those changes to be lost")
+            }
+
+            fmt.println("Available commands are: fetch, upload, open, lock, view, add, update, delete, help, verbose, quit")
         }
-        case .add_entry: {
-            fmt.println("Type entry id to add:")
+        case .view_vault:
+            print_vault(vault, state.verbose_vault)
+            fmt.println()
+            fmt.println("Available commands are: fetch, upload, open, lock, view, add, update, delete, help, verbose, quit")
+
+        case .add_entry:
+        case .update_entry:
+        case .delete_entry:
+        case .entering_password:
+    }
+}
+
+process_input :: proc(state: ^AppState, vault: ^Vault, line: string) {
+    switch line {
+        case "fetch": {
+            #partial switch state.command {
+                case .main_menu, .view_vault: {get_latest_vault(vault, state.user_id)}
+                case: {fmt.println("Invalid command")}
+            }
+            
         }
-        case .delete_entry: {
-            fmt.println("Type entry id to DELETE (WARNING WARNING, irreversible action!!!):")
+        case "upload": {
+            #partial switch state.command {
+                case .main_menu, .view_vault: {upload_vault(vault, state.user_id)}
+                case:
+            }
         }
-        case .update_entry: {
-            fmt.println("Type entry id to update (WARNING WARNING, irreversible action!!!):")
+        case "open": {
+            #partial switch state.command {
+                case .main_menu, .view_vault: {
+                    state.password = get_password()
+                    fmt.println(state.password)
+                    status := open_vault(vault, state.password)
+                    switch status {
+                        case .Success: {
+                            fmt.println("Vault opened")
+                    }
+                        case.Wrong_Password: fmt.println("Wrong password")
+                        case .Failure: fmt.println("CORRUPT VAULT")
+                        case .Too_Long_Password: fmt.println("Invalid password. Must be less than 256 bytes.")
+                    }
+                }
+                case: fmt.println("Invalid command")
+            }
         }
-        case .generate_password: {
+        case "lock": {
+            lock_vault(vault, state.password)
+        }
+        case "view": {
+            state.command = .view_vault
+        }
+        case "add": {
+            state.command = .add_entry
+        }
+        case "update": {
+
+        }
+        case "delete": {
+
+        }
+        case "help": {
+
+        }
+        case "verbose": {
+
+        }
+        case: {
+            #partial switch state.command {
+                case .add_entry, .update_entry: {
+                    switch state.subcommand {
+                        case .id:
+                        case .username:
+                        case .password:
+                        case .note:
+                        case .generate:
+                    }
+                }
+                case: fmt.println("Invalid command")
+            }
             
         }
     }
 }
+
 
 main :: proc() {
     pull := os.Process_Desc{
@@ -393,20 +608,20 @@ main :: proc() {
     add_entry(
         test_vault, 
         Entry{
-            id = ss.from_string("test account", 255), 
-            username = ss.from_string("test username", 255), 
-            password = ss.from_string("1234", 255), 
-            note = ss.from_string("This is a note", 255), 
+            id = ss.from_string("first id", 255), 
+            username = ss.from_string("first uesrname", 255), 
+            password = ss.from_string("first password", 255), 
+            note = ss.from_string("first note", 255), 
         }
     )
 
     add_entry(
         test_vault, 
         Entry{
-            id = ss.from_string("new account", 255), 
-            username = ss.from_string("test username", 255), 
-            password = ss.from_string("1234", 255), 
-            note = ss.from_string("This is a note", 255), 
+            id = ss.from_string("second id", 255), 
+            username = ss.from_string("second uesrname", 255), 
+            password = ss.from_string("second password", 255), 
+            note = ss.from_string("second note", 255), 
         }
     )
 
@@ -414,45 +629,26 @@ main :: proc() {
 
     app_state := AppState{
         verbose_vault = false,
-        current_command = .view_vault
-    }
-
-    switch app_state.current_command {
-        case .view_vault: {
-            print_vault(test_vault, verbose = app_state.verbose_vault)
-        }
-        case .add_entry: {
-
-        }
-        case .delete_entry: {
-
-        }
-        case .update_entry: {
-
-        }
-        case .generate_password: {
-
-        }
+        command = .main_menu
     }
 
     scanner: bufio.Scanner
     stdin := os.to_stream(os.stdin)
     bufio.scanner_init(&scanner, stdin, context.temp_allocator)
 
-    fmt.println("Current app state: \n-------------------")
-    fmt.println(app_state)
-    fmt.println("--------------------------")
-
     for {
-        print_options(app_state)
+        
+        render_app(&app_state, test_vault)
         fmt.printf("> ")
         if !bufio.scan(&scanner) {
             break
         }
         line := bufio.scanner_text(&scanner)
-        if line == "q" {break}
+        if line == "quit" {
+            break
+        }
+        process_input(&app_state, test_vault, line)
         
-        fmt.println(line)
     }
 
     if err := bufio.scanner_error(&scanner); err != nil {
