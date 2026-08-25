@@ -34,6 +34,8 @@ aeadAlgo :: enum u16 {
 	DEOXYS_II_256,
 }
 
+// This is just to insure the vault spec from accidentally changing with updates to the odin core crypto lib. 
+// Ensures consistent algo numbering
 algo_from_algo :: proc(algo: aeadAlgo) -> aead.Algorithm {
     switch algo {
         case .AES_GCM_128: {return .AES_GCM_128}
@@ -66,8 +68,6 @@ Vault :: struct {
     number_of_entries: u32,                         
     entries:        [MAX_ENTRIES]Entry,                     
 }
-
-
 
 AAD : [64]u8 : {
     0x45,0x6E,0x63,0x72,0x79,0x70,0x74,0x65,0x64,0x20,
@@ -115,6 +115,7 @@ Status :: enum {
 hash_password :: proc(password: string, hash_params: ^argon2id.Parameters, salt: []u8) -> ([32]u8, Status) {
     password_hash : [32]u8
     password_bytes : [256]u8
+    min_len := min(len(password), 255)
     copy(password_bytes[:len(password)], password)
     alloc_error := argon2id.derive(
         hash_params, 
@@ -130,6 +131,7 @@ hash_password :: proc(password: string, hash_params: ^argon2id.Parameters, salt:
     return password_hash, .Success
 }
 
+// TODO: Add more validation rules and checks
 blob_is_valid :: proc(blob: []u8) -> bool {
 
     magic_bytes: [8]u8 = {'E', 'Z', 'P', 'A', 'S', 'S', 'M', 'N'}
@@ -150,7 +152,6 @@ blob_to_vault :: proc(blob: []u8) -> (^Vault, Status) {
         return nil, .Failure
     }
 }
-
 
 open_vault :: proc(vault: ^Vault, password: string) -> (Status) {
     if len(password) > 255 {
@@ -223,7 +224,6 @@ lock_vault :: proc(vault: ^Vault, password: string) -> Status {
     vault.locked = true
 
     return .Success
-
 }
 
 random_bytes :: proc($N: int) -> [N]u8 {
@@ -250,7 +250,6 @@ make_new_vault :: proc() -> ^Vault {
 
     return vault
 }
-
 
 read_entry :: proc(vault: ^Vault, id: EzString) -> (Entry, int) {
     if vault.locked {
