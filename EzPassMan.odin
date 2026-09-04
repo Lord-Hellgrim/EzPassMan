@@ -2,15 +2,21 @@ package EzPassMan
 
 import "core:os"
 import "core:bufio"
+import "core:strings"
 import "core:fmt"
 import "core:time"
 import "core:io"
 import "core:unicode/utf8"
+import "core:c"
 
 import       "core:c/libc"
 import win32 "core:sys/windows"
 
 import ss "smallstrings"
+
+import mu "vendor:microui"
+import rl "vendor:raylib"
+
 
 
 print_vault :: proc(vault: ^Vault, verbose: bool) {
@@ -70,6 +76,7 @@ AppState :: struct {
     vault_fetched: time.Time,
     vault_synced: bool,
     password: string,
+    ui_state: UiState,
 }
 
 get_latest_vault :: proc(current_vault: ^Vault, user_id: string) {
@@ -278,75 +285,109 @@ process_input :: proc(state: ^AppState, vault: ^Vault, line: string) {
 }
 
 
-main :: proc() {
-    pull := os.Process_Desc{
-        working_dir = "./vault",
-        command = {"git", "pull"},
-    }
+// measure_text_width :: proc(font: microui.Font, str: string) -> i32 {
+//     return 0
+// }
 
-    commit := os.Process_Desc{
-        working_dir = "./vault",
-        command = {"git", "commit"},
-    }
-
-    push := os.Process_Desc{
-        working_dir = "./vault",
-        command = {"git", "push"},
-    }
-
-    test_vault := make_new_vault()
-
-    add_entry(
-        test_vault, 
-        Entry{
-            id = ss.from_string("first id", 255), 
-            username = ss.from_string("first uesrname", 255), 
-            password = ss.from_string("first password", 255), 
-            note = ss.from_string("first note", 255), 
-        }
-    )
-
-    add_entry(
-        test_vault, 
-        Entry{
-            id = ss.from_string("second id", 255), 
-            username = ss.from_string("second uesrname", 255), 
-            password = ss.from_string("second password", 255), 
-            note = ss.from_string("second note", 255), 
-        }
-    )
-
-    lock_vault(test_vault, "1234")
-
-    app_state := AppState{
-        verbose_vault = false,
-        command = .main_menu
-    }
-
-    scanner: bufio.Scanner
-    stdin := os.to_stream(os.stdin)
-    bufio.scanner_init(&scanner, stdin, context.temp_allocator)
-
-    for {
-        
-        render_app(&app_state, test_vault)
-        fmt.printf("> ")
-        if !bufio.scan(&scanner) {
-            break
-        }
-        line := bufio.scanner_text(&scanner)
-        if line == "quit" {
-            break
-        }
-        process_input(&app_state, test_vault, line)
-        
-    }
-
-    if err := bufio.scanner_error(&scanner); err != nil {
-        fmt.eprintln("error scanning input: %v", err)
-    }
-
-    free_all(context.temp_allocator)
+// measure_text_height :: proc(font: microui.Font) -> i32 {
+//     return 0
+// }
 
 
+UserInput :: struct {
+    keys_pressed : [dynamic;32]rl.KeyboardKey,
+    mouse_x : i32,
+    mouse_y : i32,
+    mouse_down : bool,
 }
+
+process_user_input :: proc(user_input: ^UserInput) {
+    mouse := rl.GetMousePosition()
+    user_input.mouse_x = i32(mouse.x)
+    user_input.mouse_y = i32(mouse.y)
+    clear(&user_input.keys_pressed)
+    key := rl.GetKeyPressed()
+    for key != .KEY_NULL {
+        append(&user_input.keys_pressed, key)
+    }
+}
+
+// main :: proc() {
+
+//     // -------------MICROUI------------------------------------------
+
+
+//     // ------------ TERMINAL UI -------------------------------------
+
+
+//     // pull := os.Process_Desc{
+//     //     working_dir = "./vault",
+//     //     command = {"git", "pull"},
+//     // }
+
+//     // commit := os.Process_Desc{
+//     //     working_dir = "./vault",
+//     //     command = {"git", "commit"},
+//     // }
+
+//     // push := os.Process_Desc{
+//     //     working_dir = "./vault",
+//     //     command = {"git", "push"},
+//     // }
+
+//     // test_vault := make_new_vault()
+
+//     // add_entry(
+//     //     test_vault, 
+//     //     Entry{
+//     //         id = ss.from_string("first id", 255), 
+//     //         username = ss.from_string("first uesrname", 255), 
+//     //         password = ss.from_string("first password", 255), 
+//     //         note = ss.from_string("first note", 255), 
+//     //     }
+//     // )
+
+//     // add_entry(
+//     //     test_vault, 
+//     //     Entry{
+//     //         id = ss.from_string("second id", 255), 
+//     //         username = ss.from_string("second uesrname", 255), 
+//     //         password = ss.from_string("second password", 255), 
+//     //         note = ss.from_string("second note", 255), 
+//     //     }
+//     // )
+
+//     // lock_vault(test_vault, "1234")
+
+//     // app_state := AppState{
+//     //     verbose_vault = false,
+//     //     command = .main_menu
+//     // }
+
+//     // scanner: bufio.Scanner
+//     // stdin := os.to_stream(os.stdin)
+//     // bufio.scanner_init(&scanner, stdin, context.temp_allocator)
+
+//     // for {
+        
+//     //     render_app(&app_state, test_vault)
+//     //     fmt.printf("> ")
+//     //     if !bufio.scan(&scanner) {
+//     //         break
+//     //     }
+//     //     line := bufio.scanner_text(&scanner)
+//     //     if line == "quit" {
+//     //         break
+//     //     }
+//     //     process_input(&app_state, test_vault, line)
+        
+//     // }
+
+//     // if err := bufio.scanner_error(&scanner); err != nil {
+//     //     fmt.eprintln("error scanning input: %v", err)
+//     // }
+
+//     // free_all(context.temp_allocator)
+
+
+// }
