@@ -86,7 +86,7 @@ make_sample_vault :: proc() -> ^Vault {
         test_vault, 
         Entry{
             id = ss.from_string("first id", 255), 
-            username = ss.from_string("first uesrname", 255), 
+            username = ss.from_string("first username", 255), 
             password = ss.from_string("first password", 255), 
             note = ss.from_string("first note", 255), 
         }
@@ -96,7 +96,7 @@ make_sample_vault :: proc() -> ^Vault {
         test_vault, 
         Entry{
             id = ss.from_string("second id", 255), 
-            username = ss.from_string("second uesrname", 255), 
+            username = ss.from_string("second username", 255), 
             password = ss.from_string("second password", 255), 
             note = ss.from_string("second note", 255), 
         }

@@ -130,7 +130,9 @@ initialize_renderer :: proc(state: ^UiState) {
 	ctx.text_width = measure_text_width
 	ctx.text_height = measure_text_height
 
-	state.font = Font{base = GetFontDefault(), font_scale = 5}
+	roboto_regular := rl.LoadFont("Roboto-Regular.ttf")
+
+	state.font = Font{base = roboto_regular, font_scale = 1}
 	
 	ctx.style.font = transmute(mu.Font)(&state.font)
 
@@ -206,6 +208,7 @@ render :: proc (state: ^UiState) {
 			// 	}
 			// }
 		case ^mu.Command_Rect:
+			// rl.DrawRectangleRounded(rl.Rectangle{f32(cmd.rect.x), f32(cmd.rect.y), f32(cmd.rect.w), f32(cmd.rect.h)}, 10, 5, to_rl_color(cmd.color))
 			rl.DrawRectangle(cmd.rect.x, cmd.rect.y, cmd.rect.w, cmd.rect.h, to_rl_color(cmd.color))
 		case ^mu.Command_Icon:
 			src := mu.default_atlas[cmd.id]

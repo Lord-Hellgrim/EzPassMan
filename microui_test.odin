@@ -29,6 +29,8 @@ UiState :: struct {
 	font: Font,
 	scale_text_buffer : [4]u8,
 	scale_text_len : int,
+	password_text_buffer: [1024]u8,
+	password_text_len: int,
 }
 
 initialize_ui_state :: proc(state: ^UiState) {
@@ -56,7 +58,7 @@ initialize_ui_state :: proc(state: ^UiState) {
 	}
 
 	state.screen_height = 540
-	state.screen_width = 960
+	state.screen_width = 1024
 }
 
 
@@ -93,6 +95,7 @@ BackgroundData :: struct {
 	user_id: KeyString,
 }
 
+
 main :: proc() {
 
 	app_state := new(AppState)
@@ -122,7 +125,9 @@ main :: proc() {
 	scale_text_buffer : [4]u8
 	scale_text_buffer_len : int
 	
-	vault := new(Vault)
+	vault := make_sample_vault()
+
+	starting := true
 
 	for !WindowShouldClose() {
 		free_all(context.temp_allocator)
@@ -133,7 +138,7 @@ main :: proc() {
 		
 		switch app_state.command {
 			case .start: {
-				if mu.window(ctx, "START", mu.Rect{0,0,ui_state.screen_width, ui_state.screen_height}, {.NO_RESIZE, .NO_CLOSE, .NO_INTERACT}) {
+				if mu.window(ctx, "START", mu.Rect{0,0,ui_state.screen_width, ui_state.screen_height}, {.NO_RESIZE, .NO_CLOSE, .NO_INTERACT, .NO_TITLE}) {
 					set_ui_scale(ui_state)
 					mu.layout_row(
 						ctx, 
@@ -141,27 +146,75 @@ main :: proc() {
 						measure_text_height(ctx.style.font)
 					)
 					mu.label(ctx, "Enter User id")
-					id_submitted := false
-					if .SUBMIT in mu.textbox(ctx, text_buffer[:], &text_buffer_len) {
+					res := mu.textbox(ctx, text_buffer[:], &text_buffer_len, {.ALIGN_CENTER})
+					if starting {
+						mu.set_focus(ctx, ctx.last_id)
+						starting = false
+					}
+					if .SUBMIT in res{
 						mu.set_focus(ctx, ctx.last_id)
 						text_buffer_len = 0
-						id_submitted = true
-					}
-					if id_submitted == true {
-						user_id, valid_utf8 := ss.from_slice(text_buffer[:text_buffer_len], 255)
-						if !valid_utf8 {
-							mu.label(ctx, "invalid utf8 entered")
-						}
-
+						app_state.command = .main_menu
 					}
 					
 				}
 			}
 			case .main_menu: {
-				get_latest_vault(vault, app_state.user_id)
+				if mu.window(ctx, "START", mu.Rect{0,0,ui_state.screen_width, ui_state.screen_height}, {.NO_RESIZE, .NO_CLOSE, .NO_INTERACT, .NO_TITLE}) {
+					mu.layout_row(ctx, {measure_text_width(ctx.style.font, "Add Entry")*2},
+						measure_text_height(ctx.style.font))
+					if .SUBMIT in mu.button(ctx, "Add Entry",.NONE, {.ALIGN_CENTER}) {
+						app_state.command = .add_entry
+					}
+					if .SUBMIT in mu.button(ctx, "View Vault",.NONE, {.ALIGN_CENTER}) {
+						app_state.command = .view_vault
+					}
+					if .SUBMIT in mu.button(ctx, "Update Entry",.NONE, {.ALIGN_CENTER}) {
+						app_state.command = .update_entry
+					}
+					if .SUBMIT in mu.button(ctx, "Delete Entry",.NONE, {.ALIGN_CENTER}) {
+						app_state.command = .delete_entry
+					}
+				}
+				if app_state.vault_synced {
+
+				} else {
+					get_latest_vault(vault, app_state.user_id)
+				}
 			}
 			case .view_vault: {
-
+				if mu.window(ctx, "START", mu.Rect{0,0,ui_state.screen_width, ui_state.screen_height}, {.NO_RESIZE, .NO_CLOSE, .NO_INTERACT, .NO_TITLE}) {
+						// print_vault(vault, false)
+						if vault.locked {
+							mu.layout_row(ctx, {measure_text_width(ctx.style.font, "VAULT IS LOCKED. ENTER PASSWORD")*2},
+								measure_text_height(ctx.style.font)*2)
+							mu.label(ctx, "VAULT IS LOCKED. ENTER PASSWORD")
+							if .SUBMIT in mu.textbox(ctx, app_state.ui_state.password_text_buffer[:], &app_state.ui_state.password_text_len) {
+								password := strings.clone_from_bytes(app_state.ui_state.password_text_buffer[:app_state.ui_state.password_text_len])
+								open_vault(vault, password)
+								app_state.password = password
+							}
+						} else {
+							for i in 0..<vault.number_of_entries {
+								mu.layout_row(
+									ctx, 
+									{
+										measure_text_width(ctx.style.font, "LOOOOOOOOOOOOOOOOOOOOOOOONG"),
+										measure_text_width(ctx.style.font, "Copy password"),
+									},
+									measure_text_height(ctx.style.font)*2
+									)
+		
+								if .SUBMIT in mu.button(ctx, ss.as_string(&vault.entries[i].id)) {}
+								mu.layout_begin_column(ctx)
+								mu.layout_row(ctx, {200}, measure_text_height(ctx.style.font)+10)
+								if .SUBMIT in mu.button(ctx, "Copy password") {}
+								if .SUBMIT in mu.button(ctx, "Copy username") {}
+								mu.layout_end_column(ctx)
+								mu.label(ctx, "")
+							}
+						}
+					}
 			}
 			case .add_entry: {
 
