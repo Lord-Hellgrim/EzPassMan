@@ -84,44 +84,45 @@ set_ui_scale :: proc(state: ^UiState) {
 }
 
 load_latest_vault_task :: proc(task: thread.Task) {
-	vault := cast(^Vault)task.data
-	get_latest_vault(vault, )
+	data := cast(^BackgroundData)task.data
+	get_latest_vault(data.vault_ptr, data.user_id)
 }
 
-background_data :: struct {
+BackgroundData :: struct {
 	vault_ptr: ^Vault,
 	user_id: KeyString,
 }
 
 main :: proc() {
 
+	app_state := new(AppState)
+
     ui_state := new(UiState)
 	initialize_ui_state(ui_state)
 
-	thread_pool : thread.Pool
-	thread.pool_init(&thread_pool, context.allocator, 4)
-	thread.pool_start(&thread_pool)
+	// thread_pool : thread.Pool
+	// thread.pool_init(&thread_pool, context.allocator, 4)
+	// thread.pool_start(&thread_pool)
 	
-	app_state := new(AppState)
 	
-	vault := new(Vault)
+	// background_data := BackgroundData{vault_ptr = vault, user_id = app_state.user_id}
 	
-
-	thread.pool_add_task(&thread_pool, context.allocator, load_latest_vault_task, vault)
-
+	// thread.pool_add_task(&thread_pool, context.allocator, load_latest_vault_task, vault)
+	
 	ui_state.bg = {90, 95, 100, 255}
     initialize_renderer(ui_state)
     defer destroy_renderer(ui_state)
     ctx := &ui_state.mu_ctx
     
 	user_input := new(UserInput)
-
+	
 	text_buffer : [256]u8
 	text_buffer_len : int
-
+	
 	scale_text_buffer : [4]u8
 	scale_text_buffer_len : int
 	
+	vault := new(Vault)
 
 	for !WindowShouldClose() {
 		free_all(context.temp_allocator)

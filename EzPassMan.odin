@@ -79,8 +79,38 @@ AppState :: struct {
     ui_state: UiState,
 }
 
+make_sample_vault :: proc() -> ^Vault {
+    test_vault := make_new_vault()
+
+    add_entry(
+        test_vault, 
+        Entry{
+            id = ss.from_string("first id", 255), 
+            username = ss.from_string("first uesrname", 255), 
+            password = ss.from_string("first password", 255), 
+            note = ss.from_string("first note", 255), 
+        }
+    )
+
+    add_entry(
+        test_vault, 
+        Entry{
+            id = ss.from_string("second id", 255), 
+            username = ss.from_string("second uesrname", 255), 
+            password = ss.from_string("second password", 255), 
+            note = ss.from_string("second note", 255), 
+        }
+    )
+
+    lock_vault(test_vault, "1234")
+
+    return test_vault
+
+}
+
 get_latest_vault :: proc(current_vault: ^Vault, user_id: ss.SmallString(255)) {
     // make noise connection to server and fetch vault
+   
 }
 
 upload_vault :: proc(current_vault: ^Vault, user_id: ss.SmallString(255)) {
