@@ -294,24 +294,6 @@ process_input :: proc(state: ^AppState, vault: ^Vault, line: string) {
 // }
 
 
-UserInput :: struct {
-    keys_pressed : [dynamic;32]rl.KeyboardKey,
-    mouse_x : i32,
-    mouse_y : i32,
-    mouse_down : bool,
-}
-
-process_user_input :: proc(user_input: ^UserInput) {
-    mouse := rl.GetMousePosition()
-    user_input.mouse_x = i32(mouse.x)
-    user_input.mouse_y = i32(mouse.y)
-    clear(&user_input.keys_pressed)
-    key := rl.GetKeyPressed()
-    for key != .KEY_NULL {
-        append(&user_input.keys_pressed, key)
-    }
-}
-
 // main :: proc() {
 
 //     // -------------MICROUI------------------------------------------
