@@ -17,7 +17,7 @@ import ss "smallstrings"
 import mu "vendor:microui"
 import rl "vendor:raylib"
 
-
+KeyString :: ss.SmallString(255)
 
 print_vault :: proc(vault: ^Vault, verbose: bool) {
     
@@ -68,7 +68,7 @@ Command :: enum {
 }
 
 AppState :: struct {
-    user_id: string,
+    user_id: ss.SmallString(255),
     verbose_vault: bool,
     command : Command,
     subcommand: SubCommand,
@@ -79,11 +79,11 @@ AppState :: struct {
     ui_state: UiState,
 }
 
-get_latest_vault :: proc(current_vault: ^Vault, user_id: string) {
+get_latest_vault :: proc(current_vault: ^Vault, user_id: ss.SmallString(255)) {
     // make noise connection to server and fetch vault
 }
 
-upload_vault :: proc(current_vault: ^Vault, user_id: string) {
+upload_vault :: proc(current_vault: ^Vault, user_id: ss.SmallString(255)) {
 
 }
 

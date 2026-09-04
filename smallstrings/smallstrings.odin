@@ -3,6 +3,7 @@ package smallstrings
 
 import "core:slice"
 import "core:strings"
+import "core:unicode/utf8"
 
 
 SmallString :: struct($N: u8) {
@@ -52,4 +53,12 @@ from_string :: proc(s: string, $N: u8) -> SmallString(N) {
     copy_from_string(result.data[:m], s)
     result.len = u8(m)
     return result
+}
+
+from_slice :: proc(slice: []u8, $N: u8) -> (SmallString(N), bool) {
+    result : SmallString(N)
+    m := min(len(slice), int(N))
+    copy(result.data[:m], slice[:m])
+    valid := utf8.valid_string(transmute(string)slice)
+    return result, valid
 }

@@ -3,6 +3,7 @@ package EzPassMan
 import "core:strings"
 import "core:c"
 import "core:unicode/utf8"
+import "core:fmt"
 
 import rl "vendor:raylib"
 import mu "vendor:microui"
@@ -14,6 +15,7 @@ KeyboardKey :: rl.KeyboardKey
 MouseButton :: rl.MouseButton
 WindowShouldClose :: rl.WindowShouldClose
 GetMousePosition :: rl.GetMousePosition
+GetFontDefault :: rl.GetFontDefault
 
 
 UserInput :: struct {
@@ -25,6 +27,10 @@ UserInput :: struct {
 	mouse_wheel_pos : [2]f32,
 }
 
+Font :: struct {
+	base: rl.Font,
+	font_scale: f32,
+}
 
 process_user_input :: proc(user_input: ^UserInput, state: ^UiState) {
 	ctx := &state.mu_ctx
@@ -73,9 +79,24 @@ process_user_input :: proc(user_input: ^UserInput, state: ^UiState) {
 		}
 		mu.input_text(ctx, string(buf[:n]))
 	}
-
-
 }
+
+measure_text_width :: proc(font: mu.Font, text: string) -> i32 {
+	actual_font := transmute(^Font)font
+	text := strings.clone_to_cstring(text, context.temp_allocator)
+	size := rl.MeasureTextEx(actual_font.base, text, f32(actual_font.base.baseSize)*actual_font.font_scale, actual_font.font_scale)
+	
+	return i32(size.x)
+}
+
+measure_text_height :: proc(font: mu.Font) -> i32 {
+	actual_font := transmute(^Font)font
+	text: cstring = "EzPassMan"
+	size := rl.MeasureTextEx(actual_font.base, text, f32(actual_font.base.baseSize)*actual_font.font_scale, actual_font.font_scale)
+
+	return i32(size.y)
+}
+
 
 initialize_renderer :: proc(state: ^UiState) {
 	if state.screen_height == 0 {
@@ -84,7 +105,7 @@ initialize_renderer :: proc(state: ^UiState) {
 	if state.screen_width == 0 {
 		state.screen_width = 800
 	}
-	
+	rl.SetConfigFlags({.WINDOW_RESIZABLE})
     rl.InitWindow(state.screen_width, state.screen_height, "EzPassMan")
 	rl.SetTargetFPS(60)
     
@@ -106,23 +127,27 @@ initialize_renderer :: proc(state: ^UiState) {
 		},
 	)
 
-	ctx.text_width = mu.default_atlas_text_width
-	ctx.text_height = mu.default_atlas_text_height
+	ctx.text_width = measure_text_width
+	ctx.text_height = measure_text_height
 
-	state.atlas_texture = rl.LoadRenderTexture(c.int(mu.DEFAULT_ATLAS_WIDTH), c.int(mu.DEFAULT_ATLAS_HEIGHT))
+	state.font = Font{base = GetFontDefault(), font_scale = 5}
+	
+	ctx.style.font = transmute(mu.Font)(&state.font)
+
+	// state.atlas_texture = rl.LoadRenderTexture(c.int(mu.DEFAULT_ATLAS_WIDTH), c.int(mu.DEFAULT_ATLAS_HEIGHT))
     
-	state.image = rl.GenImageColor(c.int(mu.DEFAULT_ATLAS_WIDTH), c.int(mu.DEFAULT_ATLAS_HEIGHT), rl.Color{0, 0, 0, 0})
+	// state.image = rl.GenImageColor(c.int(mu.DEFAULT_ATLAS_WIDTH), c.int(mu.DEFAULT_ATLAS_HEIGHT), rl.Color{0, 0, 0, 0})
     
-	for alpha, i in mu.default_atlas_alpha {
-        x := i % mu.DEFAULT_ATLAS_WIDTH
-		y := i / mu.DEFAULT_ATLAS_WIDTH
-		color := rl.Color{255, 255, 255, alpha}
-		rl.ImageDrawPixel(&state.image, c.int(x), c.int(y), color)
-	}
+	// for alpha, i in mu.default_atlas_alpha {
+    //     x := i % mu.DEFAULT_ATLAS_WIDTH
+	// 	y := i / mu.DEFAULT_ATLAS_WIDTH
+	// 	color := rl.Color{255, 255, 255, alpha}
+	// 	rl.ImageDrawPixel(&state.image, c.int(x), c.int(y), color)
+	// }
     
-	rl.BeginTextureMode(state.atlas_texture)
-	rl.UpdateTexture(state.atlas_texture.texture, rl.LoadImageColors(state.image))
-	rl.EndTextureMode()
+	// rl.BeginTextureMode(state.atlas_texture)
+	// rl.UpdateTexture(state.atlas_texture.texture, rl.LoadImageColors(state.image))
+	// rl.EndTextureMode()
     
 	state.screen_texture = rl.LoadRenderTexture(state.screen_width, state.screen_height)
 }
@@ -135,7 +160,7 @@ destroy_renderer :: proc(state: ^UiState) {
 
 }
 
-render :: proc "contextless" (state: ^UiState) {
+render :: proc (state: ^UiState) {
     ctx := &state.mu_ctx
 	render_texture :: proc "contextless" (renderer: rl.RenderTexture2D, dst: ^rl.Rectangle, src: mu.Rect, color: rl.Color, state: ^UiState) {
 		dst.width = f32(src.w)
@@ -148,7 +173,6 @@ render :: proc "contextless" (state: ^UiState) {
 			tint     = color,
 		)
 	}
-
 	to_rl_color :: proc "contextless" (in_color: mu.Color) -> (out_color: rl.Color) {
 		return {in_color.r, in_color.g, in_color.b, in_color.a}
 	}
@@ -163,15 +187,24 @@ render :: proc "contextless" (state: ^UiState) {
 	for variant in mu.next_command_iterator(ctx, &command_backing) {
 		switch cmd in variant {
 		case ^mu.Command_Text:
-			dst := rl.Rectangle{f32(cmd.pos.x), f32(cmd.pos.y), 0, 0}
-			for ch in cmd.str {
-				if ch&0xc0 != 0x80 {
-					r := min(int(ch), 127)
-					src := mu.default_atlas[mu.DEFAULT_ATLAS_FONT + r]
-					render_texture(state.screen_texture, &dst, src, to_rl_color(cmd.color), state)
-					dst.x += dst.width
-				}
-			}
+			text := strings.clone_to_cstring(cmd.str, context.temp_allocator)
+			actual_font := transmute(^Font)ctx.style.font
+			rl.DrawTextEx(actual_font.base,
+				text,
+				rl.Vector2(cmd.pos),
+				f32(actual_font.base.baseSize)*actual_font.font_scale,
+				actual_font.font_scale,
+				rl.WHITE,
+			)
+			// dst := rl.Rectangle{f32(cmd.pos.x), f32(cmd.pos.y), 0, 0}
+			// for ch in cmd.str {
+			// 	if ch&0xc0 != 0x80 {
+			// 		r := min(int(ch), 127)
+			// 		src := mu.default_atlas[mu.DEFAULT_ATLAS_FONT + r]
+			// 		render_texture(state.screen_texture, &dst, src, to_rl_color(cmd.color), state)
+			// 		dst.x += dst.width
+			// 	}
+			// }
 		case ^mu.Command_Rect:
 			rl.DrawRectangle(cmd.rect.x, cmd.rect.y, cmd.rect.w, cmd.rect.h, to_rl_color(cmd.color))
 		case ^mu.Command_Icon:

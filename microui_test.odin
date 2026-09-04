@@ -2,8 +2,16 @@ package EzPassMan
 
 import "core:c"
 import "core:fmt"
+import "core:strconv"
+import "core:strings"
+import "core:thread"
+import "core:sync"
+
+import "core:nbio"
 
 import mu "vendor:microui"
+
+import ss "smallstrings"
 
 UiState :: struct {
     mu_ctx: mu.Context,
@@ -18,6 +26,9 @@ UiState :: struct {
     key_map: [mu.Key][2]KeyboardKey,
     mouse_buttons_map : [mu.Mouse]MouseButton,
     screen_texture: RenderTexture2D,
+	font: Font,
+	scale_text_buffer : [4]u8,
+	scale_text_len : int,
 }
 
 initialize_ui_state :: proc(state: ^UiState) {
@@ -49,28 +60,126 @@ initialize_ui_state :: proc(state: ^UiState) {
 }
 
 
+set_ui_scale :: proc(state: ^UiState) {
+	ctx := &state.mu_ctx
+	mu.layout_row(
+		ctx,
+		{measure_text_width(ctx.style.font, "Set ui scale   "), -20},
+		measure_text_height(ctx.style.font),
+	)
+	mu.label(ctx, "Set ui scale")
+	if .SUBMIT in mu.textbox(ctx, state.scale_text_buffer[:], &state.scale_text_len) {
+		mu.set_focus(ctx, ctx.last_id)
+		str := transmute(string)state.scale_text_buffer[:state.scale_text_len]
+		scale, ok := strconv.parse_int(str)
+		if ok {
+			state.font.font_scale = f32(scale)/10
+		} else {
+			fmt.println("here")
+			fmt.println(scale)
+		}
+		state.scale_text_len = 0
+	}
+	mu.label(ctx, "")
+}
+
+load_latest_vault_task :: proc(task: thread.Task) {
+	vault := cast(^Vault)task.data
+	get_latest_vault(vault, )
+}
+
+background_data :: struct {
+	vault_ptr: ^Vault,
+	user_id: KeyString,
+}
 
 main :: proc() {
 
-    state := new(UiState)
-	initialize_ui_state(state)
+    ui_state := new(UiState)
+	initialize_ui_state(ui_state)
 
-	state.bg = {90, 95, 100, 255}
-    initialize_renderer(state)
-    defer destroy_renderer(state)
-    ctx := &state.mu_ctx
+	thread_pool : thread.Pool
+	thread.pool_init(&thread_pool, context.allocator, 4)
+	thread.pool_start(&thread_pool)
+	
+	app_state := new(AppState)
+	
+	vault := new(Vault)
+	
+
+	thread.pool_add_task(&thread_pool, context.allocator, load_latest_vault_task, vault)
+
+	ui_state.bg = {90, 95, 100, 255}
+    initialize_renderer(ui_state)
+    defer destroy_renderer(ui_state)
+    ctx := &ui_state.mu_ctx
     
 	user_input := new(UserInput)
 
+	text_buffer : [256]u8
+	text_buffer_len : int
+
+	scale_text_buffer : [4]u8
+	scale_text_buffer_len : int
+	
+
 	for !WindowShouldClose() {
 		free_all(context.temp_allocator)
-		process_user_input(user_input, state)
+		process_user_input(user_input, ui_state)
 
 		mu.begin(ctx)
-		all_windows(state)
+
+		
+		switch app_state.command {
+			case .start: {
+				if mu.window(ctx, "START", mu.Rect{0,0,ui_state.screen_width, ui_state.screen_height}, {.NO_RESIZE, .NO_CLOSE, .NO_INTERACT}) {
+					set_ui_scale(ui_state)
+					mu.layout_row(
+						ctx, 
+						{measure_text_width(ctx.style.font, "Enter User Id")*2},
+						measure_text_height(ctx.style.font)
+					)
+					mu.label(ctx, "Enter User id")
+					id_submitted := false
+					if .SUBMIT in mu.textbox(ctx, text_buffer[:], &text_buffer_len) {
+						mu.set_focus(ctx, ctx.last_id)
+						text_buffer_len = 0
+						id_submitted = true
+					}
+					if id_submitted == true {
+						user_id, valid_utf8 := ss.from_slice(text_buffer[:text_buffer_len], 255)
+						if !valid_utf8 {
+							mu.label(ctx, "invalid utf8 entered")
+						}
+
+					}
+					
+				}
+			}
+			case .main_menu: {
+				get_latest_vault(vault, app_state.user_id)
+			}
+			case .view_vault: {
+
+			}
+			case .add_entry: {
+
+			}
+			case .delete_entry: {
+
+			}
+			case .update_entry: {
+
+			}
+			case .entering_password: {
+
+			}
+
+		}
+
 		mu.end(ctx)
 
-		render(state)
+		render(ui_state)
 	}
 }
 
@@ -105,7 +214,7 @@ all_windows :: proc(state : ^UiState) {
 
     ctx := &state.mu_ctx
 
-	if mu.window(ctx, "Demo Window", {40, 40, 300, 450}, opts) {
+	if mu.window(ctx, "Demo Window", {0, 0, 300, 450}, opts) {
 		if .ACTIVE in mu.header(ctx, "Window Info") {
 			win := mu.get_current_container(ctx)
 			mu.layout_row(ctx, {54, -1}, 0)
