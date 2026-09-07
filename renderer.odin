@@ -34,14 +34,19 @@ Font :: struct {
 
 process_user_input :: proc(user_input: ^UserInput, state: ^UiState) {
 	ctx := &state.mu_ctx
+
+	state.screen_height = rl.GetScreenHeight()
+	state.screen_width = rl.GetScreenWidth()
+
     mouse := rl.GetMousePosition()
     user_input.mouse_x = i32(mouse.x)
     user_input.mouse_y = i32(mouse.y)
 	mu.input_mouse_move(ctx, user_input.mouse_x, user_input.mouse_y)
 
 	mouse_wheel_pos := rl.GetMouseWheelMoveV()
-	mu.input_scroll(ctx, i32(user_input.mouse_wheel_pos.x) * 30, i32(user_input.mouse_wheel_pos.y) * -30)
-	
+	fmt.println("rl scroll: ", mouse_wheel_pos)
+	mu.input_scroll(ctx, i32(mouse_wheel_pos.x) * 30, i32(mouse_wheel_pos.y) * -30)
+	fmt.println("mu scroll: ", ctx.scroll_delta)
 	user_input.mouse_down = rl.IsMouseButtonDown(rl.MouseButton.LEFT)
 	
 	for button_rl, button_mu in state.mouse_buttons_map {

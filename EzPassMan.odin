@@ -82,30 +82,29 @@ AppState :: struct {
 make_sample_vault :: proc() -> ^Vault {
     test_vault := make_new_vault()
 
-    add_entry(
-        test_vault, 
-        Entry{
-            id = ss.from_string("first id", 255), 
-            username = ss.from_string("first username", 255), 
-            password = ss.from_string("first password", 255), 
-            note = ss.from_string("first note", 255), 
-        }
-    )
-
-    add_entry(
-        test_vault, 
-        Entry{
-            id = ss.from_string("second id", 255), 
-            username = ss.from_string("second username", 255), 
-            password = ss.from_string("second password", 255), 
-            note = ss.from_string("second note", 255), 
-        }
-    )
+    for i in u8(0)..<10 {
+        id := ss.from_string("id number: ", 255)
+        ss.extend_with_bytes(&id, i+48)
+        username := ss.from_string("username number: ", 255)
+        ss.extend_with_bytes(&username, i+48)
+        password := ss.from_string("password number: ", 255)
+        ss.extend_with_bytes(&password, i+48)
+        note := ss.from_string("note number: ", 255)
+        ss.extend_with_bytes(&note, i+48)
+        add_entry(
+            test_vault,
+            Entry{
+                id = id, 
+                username = username,
+                password = password,
+                note = note,
+            }
+        )
+    }
 
     lock_vault(test_vault, "1234")
 
     return test_vault
-
 }
 
 get_latest_vault :: proc(current_vault: ^Vault, user_id: ss.SmallString(255)) {

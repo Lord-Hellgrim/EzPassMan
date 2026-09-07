@@ -22,7 +22,15 @@ extend_in_place :: proc(dst: ^SmallString($N), src: SmallString($M)) {
     }
 
     copy(dst[dst.len:], src[:num_chars])
+}
 
+extend_with_bytes :: proc(dst: ^SmallString($N), src: u8) {
+    if dst.len >= N {
+        return
+    } else {
+        dst.data[dst.len] = src
+        dst.len += 1
+    }
 }
 
 // Adds the first len bytes of src to dst.data. Bytes beyond the cap of dst are not copied.

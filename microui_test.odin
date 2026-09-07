@@ -31,6 +31,7 @@ UiState :: struct {
 	scale_text_len : int,
 	password_text_buffer: [1024]u8,
 	password_text_len: int,
+	scroll_state: f32,
 }
 
 initialize_ui_state :: proc(state: ^UiState) {
@@ -61,12 +62,16 @@ initialize_ui_state :: proc(state: ^UiState) {
 	state.screen_width = 1024
 }
 
+uiw :: proc(state: UiState, x: i32) -> i32 {
+	return state.screen_width/100 * x * i32(state.font.font_scale)/100*x
+}
+
 
 set_ui_scale :: proc(state: ^UiState) {
 	ctx := &state.mu_ctx
 	mu.layout_row(
 		ctx,
-		{measure_text_width(ctx.style.font, "Set ui scale   "), -20},
+		{uiw(state^, 50), state.screen_width/8},
 		measure_text_height(ctx.style.font),
 	)
 	mu.label(ctx, "Set ui scale")
@@ -83,6 +88,7 @@ set_ui_scale :: proc(state: ^UiState) {
 		state.scale_text_len = 0
 	}
 	mu.label(ctx, "")
+
 }
 
 load_latest_vault_task :: proc(task: thread.Task) {
@@ -95,36 +101,17 @@ BackgroundData :: struct {
 	user_id: KeyString,
 }
 
+ez_app_windows :: proc(ui_state: ^UiState, app_state: ^AppState) {
+	ctx := &ui_state.mu_ctx
 
-main :: proc() {
-
-	app_state := new(AppState)
-
-    ui_state := new(UiState)
-	initialize_ui_state(ui_state)
-
-	// thread_pool : thread.Pool
-	// thread.pool_init(&thread_pool, context.allocator, 4)
-	// thread.pool_start(&thread_pool)
-	
-	
-	// background_data := BackgroundData{vault_ptr = vault, user_id = app_state.user_id}
-	
-	// thread.pool_add_task(&thread_pool, context.allocator, load_latest_vault_task, vault)
-	
-	ui_state.bg = {90, 95, 100, 255}
-    initialize_renderer(ui_state)
-    defer destroy_renderer(ui_state)
-    ctx := &ui_state.mu_ctx
-    
 	user_input := new(UserInput)
-	
+
 	text_buffer : [256]u8
 	text_buffer_len : int
-	
+
 	scale_text_buffer : [4]u8
 	scale_text_buffer_len : int
-	
+
 	vault := make_sample_vault()
 
 	starting := true
@@ -135,13 +122,13 @@ main :: proc() {
 
 		mu.begin(ctx)
 
-		
+
 		switch app_state.command {
 			case .start: {
 				if mu.window(ctx, "START", mu.Rect{0,0,ui_state.screen_width, ui_state.screen_height}, {.NO_RESIZE, .NO_CLOSE, .NO_INTERACT, .NO_TITLE}) {
 					set_ui_scale(ui_state)
 					mu.layout_row(
-						ctx, 
+						ctx,
 						{measure_text_width(ctx.style.font, "Enter User Id")*2},
 						measure_text_height(ctx.style.font)
 					)
@@ -155,25 +142,33 @@ main :: proc() {
 						mu.set_focus(ctx, ctx.last_id)
 						text_buffer_len = 0
 						app_state.command = .main_menu
+						ui_state.scroll_state = 0
 					}
-					
+
 				}
 			}
 			case .main_menu: {
-				if mu.window(ctx, "START", mu.Rect{0,0,ui_state.screen_width, ui_state.screen_height}, {.NO_RESIZE, .NO_CLOSE, .NO_INTERACT, .NO_TITLE}) {
-					mu.layout_row(ctx, {measure_text_width(ctx.style.font, "Add Entry")*2},
-						measure_text_height(ctx.style.font))
+				if mu.window(ctx, "START", mu.Rect{0,0,ui_state.screen_width, ui_state.screen_height}, {.NO_RESIZE, .NO_CLOSE, .NO_INTERACT, .NO_TITLE, .ALIGN_CENTER}) {
+					mu.layout_row(
+						ctx,
+						{measure_text_width(ctx.style.font, "Add Entry")*2},
+						measure_text_height(ctx.style.font)
+					)
 					if .SUBMIT in mu.button(ctx, "Add Entry",.NONE, {.ALIGN_CENTER}) {
 						app_state.command = .add_entry
+						ui_state.scroll_state = 0
 					}
 					if .SUBMIT in mu.button(ctx, "View Vault",.NONE, {.ALIGN_CENTER}) {
 						app_state.command = .view_vault
+						ui_state.scroll_state = 0
 					}
 					if .SUBMIT in mu.button(ctx, "Update Entry",.NONE, {.ALIGN_CENTER}) {
 						app_state.command = .update_entry
+						ui_state.scroll_state = 0
 					}
 					if .SUBMIT in mu.button(ctx, "Delete Entry",.NONE, {.ALIGN_CENTER}) {
 						app_state.command = .delete_entry
+						ui_state.scroll_state = 0
 					}
 				}
 				if app_state.vault_synced {
@@ -184,7 +179,7 @@ main :: proc() {
 			}
 			case .view_vault: {
 				if mu.window(ctx, "START", mu.Rect{0,0,ui_state.screen_width, ui_state.screen_height}, {.NO_RESIZE, .NO_CLOSE, .NO_INTERACT, .NO_TITLE}) {
-						// print_vault(vault, false)
+						panel := mu.get_current_container(ctx)
 						if vault.locked {
 							mu.layout_row(ctx, {measure_text_width(ctx.style.font, "VAULT IS LOCKED. ENTER PASSWORD")*2},
 								measure_text_height(ctx.style.font)*2)
@@ -197,14 +192,14 @@ main :: proc() {
 						} else {
 							for i in 0..<vault.number_of_entries {
 								mu.layout_row(
-									ctx, 
+									ctx,
 									{
 										measure_text_width(ctx.style.font, "LOOOOOOOOOOOOOOOOOOOOOOOONG"),
 										measure_text_width(ctx.style.font, "Copy password"),
 									},
 									measure_text_height(ctx.style.font)*2
 									)
-		
+
 								if .SUBMIT in mu.button(ctx, ss.as_string(&vault.entries[i].id)) {}
 								mu.layout_begin_column(ctx)
 								mu.layout_row(ctx, {200}, measure_text_height(ctx.style.font)+10)
@@ -237,6 +232,30 @@ main :: proc() {
 	}
 }
 
+main :: proc() {
+
+	app_state := new(AppState)
+
+    ui_state := new(UiState)
+	initialize_ui_state(ui_state)
+
+	// thread_pool : thread.Pool
+	// thread.pool_init(&thread_pool, context.allocator, 4)
+	// thread.pool_start(&thread_pool)
+
+
+	// background_data := BackgroundData{vault_ptr = vault, user_id = app_state.user_id}
+
+	// thread.pool_add_task(&thread_pool, context.allocator, load_latest_vault_task, vault)
+
+	ui_state.bg = {90, 95, 100, 255}
+    initialize_renderer(ui_state)
+    defer destroy_renderer(ui_state)
+    ez_app_windows(ui_state, app_state)
+
+	// all_windows(ui_state)
+}
+
 u8_slider :: proc(ctx: ^mu.Context, val: ^u8, lo, hi: u8) -> (res: mu.Result_Set) {
 	mu.push_id(ctx, uintptr(val))
 
@@ -264,7 +283,7 @@ reset_log :: proc(state : ^UiState) {
 
 
 all_windows :: proc(state : ^UiState) {
-	@static opts := mu.Options{.NO_CLOSE}
+	opts := mu.Options{.NO_CLOSE}
 
     ctx := &state.mu_ctx
 
