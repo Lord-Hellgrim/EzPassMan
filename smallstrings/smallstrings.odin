@@ -70,3 +70,9 @@ from_slice :: proc(slice: []u8, $N: u8) -> (SmallString(N), bool) {
     valid := utf8.valid_string(transmute(string)slice)
     return result, valid
 }
+
+to_cstring :: proc(smallstring: SmallString($N), allocator := context.allocator) -> cstring {
+    smallstring := smallstring
+    s := as_string(&smallstring)
+    return strings.clone_to_cstring(s, allocator = allocator)
+} 

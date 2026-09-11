@@ -16,6 +16,8 @@ MouseButton :: rl.MouseButton
 WindowShouldClose :: rl.WindowShouldClose
 GetMousePosition :: rl.GetMousePosition
 GetFontDefault :: rl.GetFontDefault
+set_clipboard :: rl.SetClipboardText
+clear_clipboard :: rl.SetClipboardText
 
 
 UserInput :: struct {
@@ -215,7 +217,7 @@ render :: proc (state: ^UiState) {
 		case ^mu.Command_Rect:
 			// rl.DrawRectangleRounded(rl.Rectangle{f32(cmd.rect.x), f32(cmd.rect.y), f32(cmd.rect.w), f32(cmd.rect.h)}, 10, 5, to_rl_color(cmd.color))
 			rl.DrawRectangle(cmd.rect.x, cmd.rect.y, cmd.rect.w, cmd.rect.h, to_rl_color(cmd.color))
-			rl.DrawRectangleLines(cmd.rect.x, cmd.rect.y, cmd.rect.w, cmd.rect.h, to_rl_color(mu.Color{0,0,0,0}))
+			rl.DrawRectangleLines(cmd.rect.x, cmd.rect.y, cmd.rect.w, cmd.rect.h, to_rl_color(mu.Color{0,0,0,255}))
 		case ^mu.Command_Icon:
 			src := mu.default_atlas[cmd.id]
 			x := cmd.rect.x + (cmd.rect.w - src.w)/2
