@@ -74,15 +74,13 @@ set_ui_scale :: proc(state: ^UiState) {
 		measure_text_height(ctx.style.font),
 	)
 	mu.label(ctx, "Set ui scale")
-	if .SUBMIT in mu.textbox(ctx, state.scale_text_buffer[:], &state.scale_text_len) {
+	if .SUBMIT in mu.textbox(ctx, state.scale_text_buffer[:], &state.scale_text_len, opt = {.NO_SCROLL}) {
 		mu.set_focus(ctx, ctx.last_id)
 		str := transmute(string)state.scale_text_buffer[:state.scale_text_len]
 		scale, ok := strconv.parse_int(str)
 		if ok {
 			state.font.font_scale = f32(scale)/10
 		} else {
-			fmt.println("here")
-			fmt.println(scale)
 		}
 		state.scale_text_len = 0
 	}
@@ -114,22 +112,39 @@ ez_app_windows :: proc(ui_state: ^UiState, app_state: ^AppState) {
 	vault := make_sample_vault()
 
 	starting := true
+	entering_password_starting := true
 
 	for !WindowShouldClose() {
 		free_all(context.temp_allocator)
 		process_user_input(user_input, ui_state)
 
 		mu.begin(ctx)
-
 		if mu.window(ctx, "START", mu.Rect{0,0,ui_state.screen_width, ui_state.screen_height}, {.NO_RESIZE, .NO_CLOSE, .NO_INTERACT, .NO_TITLE}) {
+			mu.layout_row(ctx, {ui_state.screen_width/6, ui_state.screen_width/6*5}, ui_state.screen_height)
+			mu.layout_begin_column(ctx)
+			
+			mu.layout_row(ctx, {20, 20}, 40)
+			mu.label(ctx, "1")
+			mu.label(ctx, "2")
+			mu.label(ctx, "3")
+			mu.label(ctx, "4")
+			mu.label(ctx, "5")
+			mu.label(ctx, "6")
+			mu.layout_end_column(ctx)
+			mu.layout_begin_column(ctx)
+			
+			mu.layout_row(ctx, {ui_state.screen_width/3*2})
+			// set_ui_scale(ui_state)
 
 			switch app_state.command {
 				case .start: {
-					set_ui_scale(ui_state)
 					mu.layout_row(
 						ctx,
-						{measure_text_width(ctx.style.font, "Enter User Id")*2},
-						measure_text_height(ctx.style.font)
+						{
+							measure_text_width(ctx.style.font, "Enter User Id")*2,
+
+						},
+						measure_text_height(ctx.style.font),
 					)
 					mu.label(ctx, "Enter User id")
 					res := mu.textbox(ctx, text_buffer[:], &text_buffer_len, {.ALIGN_CENTER})
@@ -175,12 +190,20 @@ ez_app_windows :: proc(ui_state: ^UiState, app_state: ^AppState) {
 				}
 				case .view_vault: {
 					
-					panel := mu.get_current_container(ctx)
 					if vault.locked {
-						mu.layout_row(ctx, {measure_text_width(ctx.style.font, "VAULT IS LOCKED. ENTER PASSWORD")*2},
-							measure_text_height(ctx.style.font)*2)
+						
+						mu.layout_row(
+							ctx, 
+							{measure_text_width(ctx.style.font, "VAULT IS LOCKED. ENTER PASSWORD")*2},
+							measure_text_height(ctx.style.font)*2,
+						)
 						mu.label(ctx, "VAULT IS LOCKED. ENTER PASSWORD")
-						if .SUBMIT in mu.textbox(ctx, app_state.ui_state.password_text_buffer[:], &app_state.ui_state.password_text_len, opt = {.ALIGN_CENTER}) {
+						password_box_result := mu.textbox(ctx, app_state.ui_state.password_text_buffer[:], &app_state.ui_state.password_text_len, opt = {.ALIGN_CENTER})
+						if .SUBMIT in password_box_result {
+							mu.set_focus(ctx, ctx.last_id)
+							if entering_password_starting {
+								entering_password_starting = false
+							}
 							password := strings.clone_from_bytes(app_state.ui_state.password_text_buffer[:app_state.ui_state.password_text_len])
 							open_vault(vault, password)
 							app_state.password = password
@@ -220,8 +243,8 @@ ez_app_windows :: proc(ui_state: ^UiState, app_state: ^AppState) {
 				}
 	
 			}
+			mu.layout_end_column(ctx)
 		}
-
 
 		mu.end(ctx)
 

@@ -44,9 +44,7 @@ process_user_input :: proc(user_input: ^UserInput, state: ^UiState) {
 	mu.input_mouse_move(ctx, user_input.mouse_x, user_input.mouse_y)
 
 	mouse_wheel_pos := rl.GetMouseWheelMoveV()
-	fmt.println("rl scroll: ", mouse_wheel_pos)
 	mu.input_scroll(ctx, i32(mouse_wheel_pos.x) * 30, i32(mouse_wheel_pos.y) * -30)
-	fmt.println("mu scroll: ", ctx.scroll_delta)
 	user_input.mouse_down = rl.IsMouseButtonDown(rl.MouseButton.LEFT)
 	
 	for button_rl, button_mu in state.mouse_buttons_map {
@@ -135,9 +133,11 @@ initialize_renderer :: proc(state: ^UiState) {
 	ctx.text_width = measure_text_width
 	ctx.text_height = measure_text_height
 
-	roboto_regular := rl.LoadFont("Roboto-Regular.ttf")
+	ctx.style.colors[.BORDER] = mu.Color{0,0,0,0}
 
-	state.font = Font{base = roboto_regular, font_scale = 1}
+	starting_font := rl.LoadFont("Roboto-Regular.ttf")
+
+	state.font = Font{base = starting_font, font_scale = 1}
 	
 	ctx.style.font = transmute(mu.Font)(&state.font)
 
@@ -215,6 +215,7 @@ render :: proc (state: ^UiState) {
 		case ^mu.Command_Rect:
 			// rl.DrawRectangleRounded(rl.Rectangle{f32(cmd.rect.x), f32(cmd.rect.y), f32(cmd.rect.w), f32(cmd.rect.h)}, 10, 5, to_rl_color(cmd.color))
 			rl.DrawRectangle(cmd.rect.x, cmd.rect.y, cmd.rect.w, cmd.rect.h, to_rl_color(cmd.color))
+			rl.DrawRectangleLines(cmd.rect.x, cmd.rect.y, cmd.rect.w, cmd.rect.h, to_rl_color(mu.Color{0,0,0,0}))
 		case ^mu.Command_Icon:
 			src := mu.default_atlas[cmd.id]
 			x := cmd.rect.x + (cmd.rect.w - src.w)/2
