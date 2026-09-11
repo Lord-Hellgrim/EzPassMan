@@ -9,8 +9,7 @@ import "core:sync"
 
 import "core:nbio"
 
-import mu "vendor:microui"
-
+import mu "microui_modified"
 import ss "smallstrings"
 
 UiState :: struct {
@@ -122,10 +121,10 @@ ez_app_windows :: proc(ui_state: ^UiState, app_state: ^AppState) {
 
 		mu.begin(ctx)
 
+		if mu.window(ctx, "START", mu.Rect{0,0,ui_state.screen_width, ui_state.screen_height}, {.NO_RESIZE, .NO_CLOSE, .NO_INTERACT, .NO_TITLE}) {
 
-		switch app_state.command {
-			case .start: {
-				if mu.window(ctx, "START", mu.Rect{0,0,ui_state.screen_width, ui_state.screen_height}, {.NO_RESIZE, .NO_CLOSE, .NO_INTERACT, .NO_TITLE}) {
+			switch app_state.command {
+				case .start: {
 					set_ui_scale(ui_state)
 					mu.layout_row(
 						ctx,
@@ -144,11 +143,9 @@ ez_app_windows :: proc(ui_state: ^UiState, app_state: ^AppState) {
 						app_state.command = .main_menu
 						ui_state.scroll_state = 0
 					}
-
+	
 				}
-			}
-			case .main_menu: {
-				if mu.window(ctx, "START", mu.Rect{0,0,ui_state.screen_width, ui_state.screen_height}, {.NO_RESIZE, .NO_CLOSE, .NO_INTERACT, .NO_TITLE, .ALIGN_CENTER}) {
+				case .main_menu: {
 					mu.layout_row(
 						ctx,
 						{measure_text_width(ctx.style.font, "Add Entry")*2},
@@ -170,61 +167,61 @@ ez_app_windows :: proc(ui_state: ^UiState, app_state: ^AppState) {
 						app_state.command = .delete_entry
 						ui_state.scroll_state = 0
 					}
+					if app_state.vault_synced {
+	
+					} else {
+						get_latest_vault(vault, app_state.user_id)
+					}
 				}
-				if app_state.vault_synced {
+				case .view_vault: {
+					
+					panel := mu.get_current_container(ctx)
+					if vault.locked {
+						mu.layout_row(ctx, {measure_text_width(ctx.style.font, "VAULT IS LOCKED. ENTER PASSWORD")*2},
+							measure_text_height(ctx.style.font)*2)
+						mu.label(ctx, "VAULT IS LOCKED. ENTER PASSWORD")
+						if .SUBMIT in mu.textbox(ctx, app_state.ui_state.password_text_buffer[:], &app_state.ui_state.password_text_len, opt = {.ALIGN_CENTER}) {
+							password := strings.clone_from_bytes(app_state.ui_state.password_text_buffer[:app_state.ui_state.password_text_len])
+							open_vault(vault, password)
+							app_state.password = password
+						}
+					} else {
+						for i in 0..<vault.number_of_entries {
+							mu.layout_row(
+								ctx,
+								{
+									measure_text_width(ctx.style.font, "LOOOOOOOOOOOOOOOOOOOOOOOONG"),
+									measure_text_width(ctx.style.font, "Copy password"),
+								},
+								measure_text_height(ctx.style.font)*2
+								)
 
-				} else {
-					get_latest_vault(vault, app_state.user_id)
-				}
-			}
-			case .view_vault: {
-				if mu.window(ctx, "START", mu.Rect{0,0,ui_state.screen_width, ui_state.screen_height}, {.NO_RESIZE, .NO_CLOSE, .NO_INTERACT, .NO_TITLE}) {
-						panel := mu.get_current_container(ctx)
-						if vault.locked {
-							mu.layout_row(ctx, {measure_text_width(ctx.style.font, "VAULT IS LOCKED. ENTER PASSWORD")*2},
-								measure_text_height(ctx.style.font)*2)
-							mu.label(ctx, "VAULT IS LOCKED. ENTER PASSWORD")
-							if .SUBMIT in mu.textbox(ctx, app_state.ui_state.password_text_buffer[:], &app_state.ui_state.password_text_len) {
-								password := strings.clone_from_bytes(app_state.ui_state.password_text_buffer[:app_state.ui_state.password_text_len])
-								open_vault(vault, password)
-								app_state.password = password
-							}
-						} else {
-							for i in 0..<vault.number_of_entries {
-								mu.layout_row(
-									ctx,
-									{
-										measure_text_width(ctx.style.font, "LOOOOOOOOOOOOOOOOOOOOOOOONG"),
-										measure_text_width(ctx.style.font, "Copy password"),
-									},
-									measure_text_height(ctx.style.font)*2
-									)
-
-								if .SUBMIT in mu.button(ctx, ss.as_string(&vault.entries[i].id)) {}
-								mu.layout_begin_column(ctx)
-								mu.layout_row(ctx, {200}, measure_text_height(ctx.style.font)+10)
-								if .SUBMIT in mu.button(ctx, "Copy password") {}
-								if .SUBMIT in mu.button(ctx, "Copy username") {}
-								mu.layout_end_column(ctx)
-								mu.label(ctx, "")
-							}
+							if .SUBMIT in mu.button(ctx, ss.as_string(&vault.entries[i].id)) {}
+							mu.layout_begin_column(ctx)
+							mu.layout_row(ctx, {200}, measure_text_height(ctx.style.font)+10)
+							if .SUBMIT in mu.button(ctx, "Copy password") {}
+							if .SUBMIT in mu.button(ctx, "Copy username") {}
+							mu.layout_end_column(ctx)
+							mu.label(ctx, "")
 						}
 					}
+				}
+				case .add_entry: {
+	
+				}
+				case .delete_entry: {
+	
+				}
+				case .update_entry: {
+	
+				}
+				case .entering_password: {
+	
+				}
+	
 			}
-			case .add_entry: {
-
-			}
-			case .delete_entry: {
-
-			}
-			case .update_entry: {
-
-			}
-			case .entering_password: {
-
-			}
-
 		}
+
 
 		mu.end(ctx)
 
