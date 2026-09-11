@@ -31,6 +31,15 @@ UiState :: struct {
 	password_text_buffer: [1024]u8,
 	password_text_len: int,
 	scroll_state: f32,
+	entry_id_text_state: TextBox_State,
+	username_text_state: TextBox_State,
+	password_text_state: TextBox_State,
+	note_text_state: TextBox_State,
+}
+
+TextBox_State :: struct {
+	buf: [255]u8,
+	len: int,
 }
 
 initialize_ui_state :: proc(state: ^UiState) {
@@ -114,27 +123,49 @@ ez_app_windows :: proc(ui_state: ^UiState, app_state: ^AppState) {
 	starting := true
 	entering_password_starting := true
 
+	panel_split: i32 = 5
+	panel_width := ui_state.screen_width / panel_split
+
 	for !WindowShouldClose() {
 		free_all(context.temp_allocator)
 		process_user_input(user_input, ui_state)
 
 		mu.begin(ctx)
 
-		{mu.begin_window(ctx, "Side panel", mu.Rect{0,0,ui_state.screen_width/6, ui_state.screen_height}, opt = {.NO_SCROLL, .NO_INTERACT}) 
+		{
+			mu.begin_window(ctx, "Side panel", mu.Rect{0,0,panel_width, ui_state.screen_height}, opt = {.NO_SCROLL, .NO_INTERACT}) 
 			defer mu.end_window(ctx)
-			mu.layout_row(ctx, {20,20,20,20}, 100)
-			mu.label(ctx, "1")
-			mu.label(ctx, "2")
-			mu.label(ctx, "3")
-			if .SUBMIT in mu.button(ctx, "CLICK!!!") {
-				fmt.println("HAHAHAHAHAH")
+
+			if app_state.command == .start {
+				
+			} else {
+				mu.layout_row(
+					ctx,
+					{measure_text_width(ctx.style.font, "Add Entry")*2},
+					measure_text_height(ctx.style.font)
+				)
+				if .SUBMIT in mu.button(ctx, "Add Entry",.NONE, {}) {
+					app_state.command = .add_entry
+					ui_state.scroll_state = 0
+				}
+				if .SUBMIT in mu.button(ctx, "View Vault",.NONE, {}) {
+					app_state.command = .view_vault
+					ui_state.scroll_state = 0
+				}
+				if .SUBMIT in mu.button(ctx, "Update Entry",.NONE, {}) {
+					app_state.command = .update_entry
+					ui_state.scroll_state = 0
+				}
+				if .SUBMIT in mu.button(ctx, "Delete Entry",.NONE, {}) {
+					app_state.command = .delete_entry
+					ui_state.scroll_state = 0
+				}
 			}
 		}
 
-		if mu.window(ctx, "START", mu.Rect{ui_state.screen_width/6+1,0,ui_state.screen_width, ui_state.screen_height}, {.NO_RESIZE, .NO_CLOSE, .NO_INTERACT, .NO_TITLE}) {
-			mu.layout_row(ctx, {ui_state.screen_width/6, 2, ui_state.screen_width/6*5}, ui_state.screen_height)
+		if mu.window(ctx, "START", mu.Rect{panel_width, 0 , panel_width*(panel_split-1), ui_state.screen_height}, {.NO_RESIZE, .NO_CLOSE, .NO_INTERACT, .NO_TITLE}) {
+			// mu.layout_row(ctx, {panel_start, 2, panel_width}, ui_state.screen_height)
 			
-			// mu.layout_row(ctx, {ui_state.screen_width/3*2})
 			// set_ui_scale(ui_state)
 
 			switch app_state.command {
@@ -156,38 +187,39 @@ ez_app_windows :: proc(ui_state: ^UiState, app_state: ^AppState) {
 					if .SUBMIT in res{
 						mu.set_focus(ctx, ctx.last_id)
 						text_buffer_len = 0
-						app_state.command = .main_menu
+						app_state.command = .view_vault
 						ui_state.scroll_state = 0
 					}
 	
 				}
 				case .main_menu: {
-					mu.layout_row(
-						ctx,
-						{measure_text_width(ctx.style.font, "Add Entry")*2},
-						measure_text_height(ctx.style.font)
-					)
-					if .SUBMIT in mu.button(ctx, "Add Entry",.NONE, {.ALIGN_CENTER}) {
-						app_state.command = .add_entry
-						ui_state.scroll_state = 0
-					}
-					if .SUBMIT in mu.button(ctx, "View Vault",.NONE, {.ALIGN_CENTER}) {
-						app_state.command = .view_vault
-						ui_state.scroll_state = 0
-					}
-					if .SUBMIT in mu.button(ctx, "Update Entry",.NONE, {.ALIGN_CENTER}) {
-						app_state.command = .update_entry
-						ui_state.scroll_state = 0
-					}
-					if .SUBMIT in mu.button(ctx, "Delete Entry",.NONE, {.ALIGN_CENTER}) {
-						app_state.command = .delete_entry
-						ui_state.scroll_state = 0
-					}
-					if app_state.vault_synced {
+					unreachable()
+					// mu.layout_row(
+					// 	ctx,
+					// 	{measure_text_width(ctx.style.font, "Add Entry")*2},
+					// 	measure_text_height(ctx.style.font)
+					// )
+					// if .SUBMIT in mu.button(ctx, "Add Entry_X",.NONE, {.ALIGN_CENTER}) {
+					// 	app_state.command = .add_entry
+					// 	ui_state.scroll_state = 0
+					// }
+					// if .SUBMIT in mu.button(ctx, "View Vault_X",.NONE, {.ALIGN_CENTER}) {
+					// 	app_state.command = .view_vault
+					// 	ui_state.scroll_state = 0
+					// }
+					// if .SUBMIT in mu.button(ctx, "Update Entry_X",.NONE, {.ALIGN_CENTER}) {
+					// 	app_state.command = .update_entry
+					// 	ui_state.scroll_state = 0
+					// }
+					// if .SUBMIT in mu.button(ctx, "Delete Entry_X",.NONE, {.ALIGN_CENTER}) {
+					// 	app_state.command = .delete_entry
+					// 	ui_state.scroll_state = 0
+					// }
+					// if app_state.vault_synced {
 	
-					} else {
-						get_latest_vault(vault, app_state.user_id)
-					}
+					// } else {
+					// 	get_latest_vault(vault, app_state.user_id)
+					// }
 				}
 				case .view_vault: {
 					
@@ -199,7 +231,7 @@ ez_app_windows :: proc(ui_state: ^UiState, app_state: ^AppState) {
 							measure_text_height(ctx.style.font)*2,
 						)
 						mu.label(ctx, "VAULT IS LOCKED. ENTER PASSWORD")
-						password_box_result := mu.textbox(ctx, app_state.ui_state.password_text_buffer[:], &app_state.ui_state.password_text_len, opt = {.ALIGN_CENTER})
+						password_box_result := mu.textbox(ctx, app_state.ui_state.password_text_buffer[:], &app_state.ui_state.password_text_len, opt = {.ALIGN_CENTER}, local_style = .PasswordText)
 						if .SUBMIT in password_box_result {
 							mu.set_focus(ctx, ctx.last_id)
 							if entering_password_starting {
@@ -239,7 +271,28 @@ ez_app_windows :: proc(ui_state: ^UiState, app_state: ^AppState) {
 					}
 				}
 				case .add_entry: {
-	
+					mu.layout_row(ctx, {300, 100, 100}, 100)
+					{mu.layout_column(ctx)
+						// mu.layout_row(ctx, {300})
+						mu.label(ctx, "Entry ID")
+						mu.label(ctx, "username")
+						mu.label(ctx, "password")
+					}
+					{mu.layout_column(ctx)
+						mu.layout_row(ctx, {200})
+						if .SUBMIT in mu.textbox(ctx, app_state.ui_state.entry_id_text_state.buf[:], &app_state.ui_state.entry_id_text_state.len) {
+							
+						}
+						if .SUBMIT in mu.textbox(ctx, app_state.ui_state.username_text_state.buf[:], &app_state.ui_state.username_text_state.len) {
+							
+						}
+						if .SUBMIT in mu.textbox(ctx, app_state.ui_state.password_text_state.buf[:], &app_state.ui_state.password_text_state.len) {
+							
+						}
+						if .SUBMIT in mu.textbox(ctx, app_state.ui_state.note_text_state.buf[:], &app_state.ui_state.note_text_state.len) {
+							
+						}
+					}
 				}
 				case .delete_entry: {
 	

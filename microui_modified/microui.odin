@@ -156,10 +156,17 @@ Command_Clip :: struct {
 	using command: Command, 
 	rect: Rect,
 }
+LocalStyle :: enum {
+	None,
+	PasswordText,
+	Bordered,
+	Cursor,
+}
 Command_Rect :: struct { 
 	using command: Command, 
 	rect:  Rect, 
 	color: Color,
+	local_style: LocalStyle,
 }
 Command_Text :: struct { 
 	using command: Command, 
@@ -167,6 +174,7 @@ Command_Text :: struct {
 	pos:   Vec2, 
 	color: Color, 
 	str:   string, /* + string data (VLA) */ 
+	local_style: LocalStyle,
 }
 Command_Icon :: struct { 
 	using command: Command, 
@@ -662,13 +670,14 @@ set_clip :: proc(ctx: ^Context, rect: Rect) {
 	cmd.rect = rect
 }
 
-draw_rect :: proc(ctx: ^Context, rect: Rect, color: Color) {
+draw_rect :: proc(ctx: ^Context, rect: Rect, color: Color, local_style: LocalStyle = .None) {
 	rect := rect
 	rect = intersect_rects(rect, get_clip_rect(ctx))
 	if rect.w > 0 && rect.h > 0 {
 		cmd := push_command(ctx, Command_Rect)
 		cmd.rect = rect
 		cmd.color = color
+		cmd.local_style = local_style
 	}
 }
 
@@ -679,7 +688,7 @@ draw_box :: proc(ctx: ^Context, rect: Rect, color: Color) {
 	draw_rect(ctx, Rect{rect.x+rect.w-1, rect.y,          1,        rect.h}, color)
 }
 
-draw_text :: proc(ctx: ^Context, font: Font, str: string, pos: Vec2, color: Color) {
+draw_text :: proc(ctx: ^Context, font: Font, str: string, pos: Vec2, color: Color, local_style : LocalStyle = .None) {
 	rect := Rect{pos.x, pos.y, ctx.text_width(font, str), ctx.text_height(font)}
 	clipped := check_clip(ctx, rect)
 	switch clipped {
@@ -692,6 +701,7 @@ draw_text :: proc(ctx: ^Context, font: Font, str: string, pos: Vec2, color: Colo
 	text_cmd.pos = pos
 	text_cmd.color = color
 	text_cmd.font = font
+	text_cmd.local_style = local_style
 	/* copy string */
 	dst_str := ([^]byte)(text_cmd)[size_of(Command_Text):][:len(str)]
 	copy(dst_str, str)
@@ -988,7 +998,7 @@ checkbox :: proc(ctx: ^Context, label: string, state: ^bool) -> (res: Result_Set
 	return
 }
 
-textbox_raw :: proc(ctx: ^Context, textbuf: []u8, textlen: ^int, id: Id, r: Rect, opt := Options{}) -> (res: Result_Set) {
+textbox_raw :: proc(ctx: ^Context, textbuf: []u8, textlen: ^int, id: Id, r: Rect, opt := Options{}, local_style: LocalStyle = .None) -> (res: Result_Set) {
 	update_control(ctx, id, r, opt | {.HOLD_FOCUS})
 
 	font := ctx.style.font
@@ -1126,8 +1136,8 @@ textbox_raw :: proc(ctx: ^Context, textbuf: []u8, textlen: ^int, id: Id, r: Rect
 		texty      := r.y + (r.h - texth) / 2
 		push_clip_rect(ctx, r)
 		draw_rect(ctx, Rect{textx + min(headx, tailx), texty, abs(headx - tailx), texth}, sel_color)
-		draw_text(ctx, font, textstr, Vec2{textx, texty}, text_color)
-		draw_rect(ctx, Rect{textx + headx, texty, 1, texth}, text_color)
+		draw_text(ctx, font, textstr, Vec2{textx, texty}, text_color, local_style)
+		draw_rect(ctx, Rect{textx + headx, texty, 1, texth}, text_color, local_style = .Cursor)
 		pop_clip_rect(ctx)
 	} else {
 		draw_control_text(ctx, textstr, r, .TEXT, opt)
@@ -1142,14 +1152,14 @@ parse_real :: #force_inline proc(s: string) -> (Real, bool) {
 	return Real(f), ok
 }
  
-number_textbox :: proc(ctx: ^Context, value: ^Real, r: Rect, id: Id, fmt_string: string) -> bool {
+number_textbox :: proc(ctx: ^Context, value: ^Real, r: Rect, id: Id, fmt_string: string, local_style: LocalStyle = .None) -> bool {
 	if ctx.mouse_pressed_bits == {.LEFT} && .SHIFT in ctx.key_down_bits && ctx.hover_id == id {
 		ctx.number_edit_id = id
 		nstr := fmt.bprintf(ctx.number_edit_buf[:], fmt_string, value^)
 		ctx.number_edit_len = len(nstr)
 	}
 	if ctx.number_edit_id == id {
-		res := textbox_raw(ctx, ctx.number_edit_buf[:], &ctx.number_edit_len, id, r, {})
+		res := textbox_raw(ctx, ctx.number_edit_buf[:], &ctx.number_edit_len, id, r, {}, {})
 		if .SUBMIT in res || ctx.focus_id != id {
 			value^, _ = parse_real(string(ctx.number_edit_buf[:ctx.number_edit_len]))
 			ctx.number_edit_id = 0
@@ -1160,10 +1170,10 @@ number_textbox :: proc(ctx: ^Context, value: ^Real, r: Rect, id: Id, fmt_string:
 	return false
 }
 
-textbox :: proc(ctx: ^Context, buf: []u8, textlen: ^int, opt := Options{}) -> Result_Set {
+textbox :: proc(ctx: ^Context, buf: []u8, textlen: ^int, opt := Options{}, local_style: LocalStyle = .None) -> Result_Set {
 	id := get_id(ctx, uintptr(&buf[0]))
 	r := layout_next(ctx)
-	return textbox_raw(ctx, buf, textlen, id, r, opt)
+	return textbox_raw(ctx, buf, textlen, id, r, opt, local_style = local_style)
 }
 
 slider :: proc(ctx: ^Context, value: ^Real, low, high: Real, step: Real = 0.0, fmt_string: string = SLIDER_FMT, opt: Options = {.ALIGN_CENTER}) -> (res: Result_Set) {

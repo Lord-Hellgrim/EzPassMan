@@ -196,7 +196,12 @@ render :: proc (state: ^UiState) {
 	for variant in mu.next_command_iterator(ctx, &command_backing) {
 		switch cmd in variant {
 		case ^mu.Command_Text:
-			text := strings.clone_to_cstring(cmd.str, context.temp_allocator)
+			text : cstring
+			if cmd.local_style == .PasswordText {
+				text = passtring(len(cmd.str))
+			} else {
+				text = strings.clone_to_cstring(cmd.str, context.temp_allocator)
+			}
 			actual_font := transmute(^Font)ctx.style.font
 			rl.DrawTextEx(actual_font.base,
 				text,
@@ -217,7 +222,12 @@ render :: proc (state: ^UiState) {
 		case ^mu.Command_Rect:
 			// rl.DrawRectangleRounded(rl.Rectangle{f32(cmd.rect.x), f32(cmd.rect.y), f32(cmd.rect.w), f32(cmd.rect.h)}, 10, 5, to_rl_color(cmd.color))
 			rl.DrawRectangle(cmd.rect.x, cmd.rect.y, cmd.rect.w, cmd.rect.h, to_rl_color(cmd.color))
-			rl.DrawRectangleLines(cmd.rect.x, cmd.rect.y, cmd.rect.w, cmd.rect.h, to_rl_color(mu.Color{0,0,0,255}))
+			if cmd.local_style != .Cursor {
+				rl.DrawRectangleLines(cmd.rect.x, cmd.rect.y, cmd.rect.w, cmd.rect.h, to_rl_color(mu.Color{0,0,0,255}))
+			} else {
+				
+				fmt.println("CURSOR")
+			}
 		case ^mu.Command_Icon:
 			src := mu.default_atlas[cmd.id]
 			x := cmd.rect.x + (cmd.rect.w - src.w)/2
@@ -239,4 +249,12 @@ render :: proc (state: ^UiState) {
 		tint     = rl.WHITE,
 	)
 	rl.EndDrawing()
+}
+
+passtring :: proc(len: int, allocator := context.temp_allocator) -> cstring {
+	buf := make([]u8, len+1)
+	for i in 0..<len {
+		buf[i] = 42
+	}
+	return cstring(raw_data(buf))
 }
