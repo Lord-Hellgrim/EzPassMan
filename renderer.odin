@@ -224,9 +224,6 @@ render :: proc (state: ^UiState) {
 			rl.DrawRectangle(cmd.rect.x, cmd.rect.y, cmd.rect.w, cmd.rect.h, to_rl_color(cmd.color))
 			if cmd.local_style != .Cursor {
 				rl.DrawRectangleLines(cmd.rect.x, cmd.rect.y, cmd.rect.w, cmd.rect.h, to_rl_color(mu.Color{0,0,0,255}))
-			} else {
-				
-				fmt.println("CURSOR")
 			}
 		case ^mu.Command_Icon:
 			src := mu.default_atlas[cmd.id]

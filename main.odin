@@ -6,11 +6,43 @@ import "core:strconv"
 import "core:strings"
 import "core:thread"
 import "core:sync"
+import "core:time"
 
 import "core:nbio"
 
 import mu "microui_modified"
 import ss "smallstrings"
+
+
+SubCommand :: enum {
+    id,
+    username,
+    password,
+    note,
+    generate,
+}
+
+Command :: enum {
+    start,
+    main_menu,
+    view_vault,
+    add_entry,
+    delete_entry,
+    update_entry,
+    entering_password,
+}
+
+AppState :: struct {
+    user_id: ss.SmallString(255),
+    verbose_vault: bool,
+    command : Command,
+    subcommand: SubCommand,
+    help: bool,
+    vault_fetched: time.Time,
+    vault_synced: bool,
+    password: string,
+    ui_state: UiState,
+}
 
 UiState :: struct {
     mu_ctx: mu.Context,
@@ -132,8 +164,8 @@ ez_app_windows :: proc(ui_state: ^UiState, app_state: ^AppState) {
 
 		mu.begin(ctx)
 
-		{
-			mu.begin_window(ctx, "Side panel", mu.Rect{0,0,panel_width, ui_state.screen_height}, opt = {.NO_SCROLL, .NO_INTERACT}) 
+		{//------------------------------------- Side Panel -----------------------------------------------
+			mu.begin_window(ctx, "Side panel", mu.Rect{0,0,panel_width, ui_state.screen_height}, opt = {.NO_SCROLL, .NO_INTERACT, .NO_TITLE}) 
 			defer mu.end_window(ctx)
 
 			if app_state.command == .start {
@@ -161,7 +193,7 @@ ez_app_windows :: proc(ui_state: ^UiState, app_state: ^AppState) {
 					ui_state.scroll_state = 0
 				}
 			}
-		}
+		} // -------------------------End of side panel -----------------------------------------------------
 
 		if mu.window(ctx, "START", mu.Rect{panel_width, 0 , panel_width*(panel_split-1), ui_state.screen_height}, {.NO_RESIZE, .NO_CLOSE, .NO_INTERACT, .NO_TITLE}) {
 			// mu.layout_row(ctx, {panel_start, 2, panel_width}, ui_state.screen_height)
@@ -232,8 +264,8 @@ ez_app_windows :: proc(ui_state: ^UiState, app_state: ^AppState) {
 						)
 						mu.label(ctx, "VAULT IS LOCKED. ENTER PASSWORD")
 						password_box_result := mu.textbox(ctx, app_state.ui_state.password_text_buffer[:], &app_state.ui_state.password_text_len, opt = {.ALIGN_CENTER}, local_style = .PasswordText)
+						mu.set_focus(ctx, ctx.last_id)
 						if .SUBMIT in password_box_result {
-							mu.set_focus(ctx, ctx.last_id)
 							if entering_password_starting {
 								entering_password_starting = false
 							}
@@ -254,18 +286,17 @@ ez_app_windows :: proc(ui_state: ^UiState, app_state: ^AppState) {
 								)
 
 							if .SUBMIT in mu.button(ctx, ss.as_string(&vault.entries[i].id)) {}
-							mu.layout_begin_column(ctx)
-							mu.layout_row(ctx, {200}, measure_text_height(ctx.style.font)+10)
-							mu.push_id_string(ctx, ss.as_string(&vault.entries[i].id))
-							if .SUBMIT in mu.button(ctx, "Copy password") {
-								fmt.println(ss.as_string(&vault.entries[i].password))
-								set_clipboard(ss.to_cstring(vault.entries[i].password))
+							{mu.layout_column(ctx)
+								mu.layout_row(ctx, {200}, measure_text_height(ctx.style.font)+10)
+								mu.push_id_string(ctx, ss.as_string(&vault.entries[i].username))
+								if .SUBMIT in mu.button(ctx, "Copy username") {}
+								mu.pop_id(ctx)
+								mu.push_id_string(ctx, ss.as_string(&vault.entries[i].id))
+								if .SUBMIT in mu.button(ctx, "Copy password") {
+									set_clipboard(ss.to_cstring(vault.entries[i].password))
+								}
+								mu.pop_id(ctx)
 							}
-							mu.pop_id(ctx)
-							mu.push_id_string(ctx, ss.as_string(&vault.entries[i].username))
-							if .SUBMIT in mu.button(ctx, "Copy username") {}
-							mu.pop_id(ctx)
-							mu.layout_end_column(ctx)
 							mu.label(ctx, "")
 						}
 					}
@@ -273,13 +304,14 @@ ez_app_windows :: proc(ui_state: ^UiState, app_state: ^AppState) {
 				case .add_entry: {
 					mu.layout_row(ctx, {300, 100, 100}, 100)
 					{mu.layout_column(ctx)
-						// mu.layout_row(ctx, {300})
+						mu.layout_row(ctx, {300}, 40)
 						mu.label(ctx, "Entry ID")
-						mu.label(ctx, "username")
-						mu.label(ctx, "password")
+						mu.label(ctx, "Username")
+						mu.label(ctx, "Password")
+						mu.label(ctx, "Note")
 					}
 					{mu.layout_column(ctx)
-						mu.layout_row(ctx, {200})
+						mu.layout_row(ctx, {300}, 40)
 						if .SUBMIT in mu.textbox(ctx, app_state.ui_state.entry_id_text_state.buf[:], &app_state.ui_state.entry_id_text_state.len) {
 							
 						}
@@ -328,3 +360,14 @@ main :: proc() {
 
 }
 
+
+// -------------------Networking code -----------------------------------------------------
+
+get_latest_vault :: proc(current_vault: ^Vault, user_id: ss.SmallString(255)) {
+    // make noise connection to server and fetch vault
+   
+}
+
+upload_vault :: proc(current_vault: ^Vault, user_id: ss.SmallString(255)) {
+
+}

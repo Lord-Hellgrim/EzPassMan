@@ -17,104 +17,14 @@ import ss "smallstrings"
 import mu "vendor:microui"
 import rl "vendor:raylib"
 
-KeyString :: ss.SmallString(255)
-
-print_vault :: proc(vault: ^Vault, verbose: bool) {
-    
-    if verbose == true {    
-            fmt.println("vault.locked: ", vault.locked)
-            fmt.println("vault.magic_bytes: ", vault.magic_bytes)
-            fmt.println("vault.version: ", vault.version)
-            fmt.println("vault.password_algo: ", vault.password_algo)
-            fmt.println("vault.aead_algo: ", vault.aead_algo)
-            fmt.println("vault.password_salt: ", vault.password_salt)
-            fmt.println("vault.password_hasher_params: ", vault.password_hasher_params)
-            fmt.println("vault.aead_tag: ", vault.aead_tag)
-            fmt.println("vault.aead_iv: ", vault.aead_iv)
-            fmt.println("vault.aead_aad: ", vault.aead_aad)
-            fmt.println("vault.number_of_entries: ", vault.number_of_entries)
-    }
-    fmt.println("------------ENTRIES--------------")
-    
-    if vault.locked {
-        fmt.println("Vault is locked\nNo entries can be printed")
-    } else {
-        for &entry in vault.entries[:vault.number_of_entries] {
-            print_entry(&entry)
-        }
-
-    }
-
-    fmt.println("---------------------------------")
-}
 
 
-SubCommand :: enum {
-    id,
-    username,
-    password,
-    note,
-    generate,
-}
 
-Command :: enum {
-    start,
-    main_menu,
-    view_vault,
-    add_entry,
-    delete_entry,
-    update_entry,
-    entering_password,
-}
 
-AppState :: struct {
-    user_id: ss.SmallString(255),
-    verbose_vault: bool,
-    command : Command,
-    subcommand: SubCommand,
-    help: bool,
-    vault_fetched: time.Time,
-    vault_synced: bool,
-    password: string,
-    ui_state: UiState,
-}
 
-make_sample_vault :: proc() -> ^Vault {
-    test_vault := make_new_vault()
 
-    for i in u8(0)..<10 {
-        id := ss.from_string("id number: ", 255)
-        ss.extend_with_bytes(&id, i+48)
-        username := ss.from_string("username number: ", 255)
-        ss.extend_with_bytes(&username, i+48)
-        password := ss.from_string("password number: ", 255)
-        ss.extend_with_bytes(&password, i+48)
-        note := ss.from_string("note number: ", 255)
-        ss.extend_with_bytes(&note, i+48)
-        add_entry(
-            test_vault,
-            Entry{
-                id = id, 
-                username = username,
-                password = password,
-                note = note,
-            }
-        )
-    }
 
-    lock_vault(test_vault, "1234")
 
-    return test_vault
-}
-
-get_latest_vault :: proc(current_vault: ^Vault, user_id: ss.SmallString(255)) {
-    // make noise connection to server and fetch vault
-   
-}
-
-upload_vault :: proc(current_vault: ^Vault, user_id: ss.SmallString(255)) {
-
-}
 
 
 orig_mode: win32.DWORD
