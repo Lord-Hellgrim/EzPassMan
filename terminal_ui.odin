@@ -125,7 +125,7 @@ render_app :: proc(state: ^AppState, vault: ^Vault) {
         case .main_menu: {
             fmt.println("Welcome to EzPassMan")
             fmt.println("Current vault status: ")
-            if vault.locked {
+            if vault.is_locked {
                 fmt.println("   LOCKED")
             } else {
                 fmt.println("   OPEN")
@@ -145,7 +145,7 @@ render_app :: proc(state: ^AppState, vault: ^Vault) {
             fmt.println("Available commands are: fetch, upload, open, lock, view, add, update, delete, help, verbose, quit")
 
         case .add_entry:
-        case .update_entry:
+        case .edit_entry:
         case .delete_entry:
         case .entering_password:
     }
@@ -207,7 +207,7 @@ process_input :: proc(state: ^AppState, vault: ^Vault, line: string) {
         }
         case: {
             #partial switch state.command {
-                case .add_entry, .update_entry: {
+                case .add_entry, .edit_entry: {
                     switch state.subcommand {
                         case .id:
                         case .username:

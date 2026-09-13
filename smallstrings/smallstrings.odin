@@ -39,7 +39,6 @@ extend_with_string :: proc(dst: ^SmallString($N), src: string) {
     if num_chars > N - dst.len {
         num_chars = N-dst.len
     }
-
     copy(dst[dst.len:], src[:num_chars])
 }
 

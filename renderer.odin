@@ -137,7 +137,7 @@ initialize_renderer :: proc(state: ^UiState) {
 
 	ctx.style.colors[.BORDER] = mu.Color{0,0,0,0}
 
-	starting_font := rl.LoadFont("Roboto-Regular.ttf")
+	starting_font := rl.LoadFont("assets/Roboto-Regular.ttf")
 
 	state.font = Font{base = starting_font, font_scale = 1}
 	
@@ -166,7 +166,6 @@ destroy_renderer :: proc(state: ^UiState) {
     rl.UnloadRenderTexture(state.atlas_texture)
     rl.UnloadImage(state.image)
     rl.UnloadRenderTexture(state.screen_texture)
-
 }
 
 render :: proc (state: ^UiState) {

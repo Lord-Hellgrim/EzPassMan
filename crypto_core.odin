@@ -56,7 +56,7 @@ algo_from_algo :: proc(algo: aeadAlgo) -> aead.Algorithm {
 }
 
 Vault :: struct {   
-    locked: b64,                                    
+    is_locked: b64,                                    
     magic_bytes:    [8]u8,                          
     version:        [4]u16,                         
     password_algo:  PasswordAlgo,                   
@@ -160,7 +160,7 @@ open_vault :: proc(vault: ^Vault, password: string) -> (Status) {
         return .Too_Long_Password
     }
 
-    if !vault.locked {
+    if !vault.is_locked {
         return .Failure
     }
 
@@ -193,7 +193,7 @@ open_vault :: proc(vault: ^Vault, password: string) -> (Status) {
         return .Failure
     } else {
         vault^ = new_vault^
-        vault.locked = false
+        vault.is_locked = false
         destroy_vault(new_vault)
         return .Success
     }
@@ -223,7 +223,7 @@ lock_vault :: proc(vault: ^Vault, password: string) -> Status {
         vault_entries_bytes,
     )
 
-    vault.locked = true
+    vault.is_locked = true
 
     return .Success
 }
@@ -236,7 +236,7 @@ random_bytes :: proc($N: int) -> [N]u8 {
 
 make_new_vault :: proc() -> ^Vault {
     vault: ^Vault = new(Vault, context.allocator)
-    vault.locked = false
+    vault.is_locked = false
     vault.magic_bytes = {'E', 'Z', 'P', 'A', 'S', 'S', 'M', 'N'}
     vault.version = {0,0,0,0}
     vault.password_algo = .argon2id
@@ -284,7 +284,7 @@ make_sample_vault :: proc() -> ^Vault {
 print_vault :: proc(vault: ^Vault, verbose: bool) {
     
     if verbose == true {    
-            fmt.println("vault.locked: ", vault.locked)
+            fmt.println("vault.locked: ", vault.is_locked)
             fmt.println("vault.magic_bytes: ", vault.magic_bytes)
             fmt.println("vault.version: ", vault.version)
             fmt.println("vault.password_algo: ", vault.password_algo)
@@ -298,7 +298,7 @@ print_vault :: proc(vault: ^Vault, verbose: bool) {
     }
     fmt.println("------------ENTRIES--------------")
     
-    if vault.locked {
+    if vault.is_locked {
         fmt.println("Vault is locked\nNo entries can be printed")
     } else {
         for &entry in vault.entries[:vault.number_of_entries] {
@@ -311,7 +311,7 @@ print_vault :: proc(vault: ^Vault, verbose: bool) {
 }
 
 read_entry :: proc(vault: ^Vault, id: EzString) -> (Entry, int) {
-    if vault.locked {
+    if vault.is_locked {
         return NullEntry, -1
     }
     result := NullEntry
@@ -334,7 +334,7 @@ read_entry :: proc(vault: ^Vault, id: EzString) -> (Entry, int) {
 }
 
 add_entry :: proc(vault: ^Vault, entry: Entry) -> Status {
-    if vault.locked {
+    if vault.is_locked {
         return .Failure
     }
     old_entry, index := read_entry(vault, entry.id)
@@ -348,7 +348,7 @@ add_entry :: proc(vault: ^Vault, entry: Entry) -> Status {
 }
 
 update_entry :: proc(vault: ^Vault, new_entry: Entry) -> Status {
-    if vault.locked {
+    if vault.is_locked {
         return .Failure
     }
     old_entry, index := read_entry(vault, new_entry.id)
@@ -361,7 +361,7 @@ update_entry :: proc(vault: ^Vault, new_entry: Entry) -> Status {
 }
 
 delete_entry :: proc(vault: ^Vault, id: EzString) -> Status {
-    if vault.locked {
+    if vault.is_locked {
         return .Failure
     }
     _, index := read_entry(vault, id)

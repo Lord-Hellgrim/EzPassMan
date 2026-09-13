@@ -7,6 +7,7 @@ import "core:strings"
 import "core:thread"
 import "core:sync"
 import "core:time"
+import "core:slice"
 
 import "core:nbio"
 
@@ -28,7 +29,7 @@ Command :: enum {
     view_vault,
     add_entry,
     delete_entry,
-    update_entry,
+    edit_entry,
     entering_password,
 }
 
@@ -67,6 +68,7 @@ UiState :: struct {
 	username_text_state: TextBox_State,
 	password_text_state: TextBox_State,
 	note_text_state: TextBox_State,
+	filter_text_state: TextBox_State,
 }
 
 TextBox_State :: struct {
@@ -74,7 +76,7 @@ TextBox_State :: struct {
 	len: int,
 }
 
-initialize_ui_state :: proc(state: ^UiState) {
+initialize_ui :: proc(state: ^UiState) {
 	state.key_map = [mu.Key][2]KeyboardKey{
 		.SHIFT     = {.LEFT_SHIFT,   .RIGHT_SHIFT},
 		.CTRL      = {.LEFT_CONTROL, .RIGHT_CONTROL},
@@ -139,8 +141,13 @@ BackgroundData :: struct {
 	user_id: KeyString,
 }
 
-ez_app_windows :: proc(ui_state: ^UiState, app_state: ^AppState) {
-	ctx := &ui_state.mu_ctx
+clear_text_buffers :: proc() {
+	
+}
+
+ez_app_windows :: proc(app_state: ^AppState) {
+	ctx := &app_state.ui_state.mu_ctx
+	ui := &app_state.ui_state
 
 	user_input := new(UserInput)
 
@@ -156,16 +163,16 @@ ez_app_windows :: proc(ui_state: ^UiState, app_state: ^AppState) {
 	entering_password_starting := true
 
 	panel_split: i32 = 5
-	panel_width := ui_state.screen_width / panel_split
+	panel_width := ui.screen_width / panel_split
 
 	for !WindowShouldClose() {
 		free_all(context.temp_allocator)
-		process_user_input(user_input, ui_state)
+		process_user_input(user_input, ui)
 
 		mu.begin(ctx)
 
 		{//------------------------------------- Side Panel -----------------------------------------------
-			mu.begin_window(ctx, "Side panel", mu.Rect{0,0,panel_width, ui_state.screen_height}, opt = {.NO_SCROLL, .NO_INTERACT, .NO_TITLE}) 
+			mu.begin_window(ctx, "Side panel", mu.Rect{0,0,panel_width, ui.screen_height}, opt = {.NO_SCROLL, .NO_INTERACT, .NO_TITLE}) 
 			defer mu.end_window(ctx)
 
 			if app_state.command == .start {
@@ -178,35 +185,24 @@ ez_app_windows :: proc(ui_state: ^UiState, app_state: ^AppState) {
 				)
 				if .SUBMIT in mu.button(ctx, "Add Entry",.NONE, {}) {
 					app_state.command = .add_entry
-					ui_state.scroll_state = 0
+					ui.scroll_state = 0
 				}
-				if .SUBMIT in mu.button(ctx, "View Vault",.NONE, {}) {
-					app_state.command = .view_vault
-					ui_state.scroll_state = 0
+				if !vault.is_locked {
+					if .SUBMIT in mu.button(ctx, "Lock Vault", .NONE, {}) {
+						lock_vault(vault, app_state.password)
+					}
 				}
-				if .SUBMIT in mu.button(ctx, "Update Entry",.NONE, {}) {
-					app_state.command = .update_entry
-					ui_state.scroll_state = 0
-				}
-				if .SUBMIT in mu.button(ctx, "Delete Entry",.NONE, {}) {
-					app_state.command = .delete_entry
-					ui_state.scroll_state = 0
-				}
+				mu.textbox(ctx, ui.filter_text_state.buf[:], &ui.filter_text_state.len)
 			}
 		} // -------------------------End of side panel -----------------------------------------------------
 
-		if mu.window(ctx, "START", mu.Rect{panel_width, 0 , panel_width*(panel_split-1), ui_state.screen_height}, {.NO_RESIZE, .NO_CLOSE, .NO_INTERACT, .NO_TITLE}) {
-			// mu.layout_row(ctx, {panel_start, 2, panel_width}, ui_state.screen_height)
-			
-			// set_ui_scale(ui_state)
-
+		if mu.window(ctx, "START", mu.Rect{panel_width, 0 , panel_width*(panel_split-1), ui.screen_height}, {.NO_RESIZE, .NO_CLOSE, .NO_INTERACT, .NO_TITLE}) {
 			switch app_state.command {
 				case .start: {
 					mu.layout_row(
 						ctx,
 						{
 							measure_text_width(ctx.style.font, "Enter User Id")*2,
-
 						},
 						measure_text_height(ctx.style.font),
 					)
@@ -220,61 +216,29 @@ ez_app_windows :: proc(ui_state: ^UiState, app_state: ^AppState) {
 						mu.set_focus(ctx, ctx.last_id)
 						text_buffer_len = 0
 						app_state.command = .view_vault
-						ui_state.scroll_state = 0
+						ui.scroll_state = 0
 					}
-	
-				}
-				case .main_menu: {
-					unreachable()
-					// mu.layout_row(
-					// 	ctx,
-					// 	{measure_text_width(ctx.style.font, "Add Entry")*2},
-					// 	measure_text_height(ctx.style.font)
-					// )
-					// if .SUBMIT in mu.button(ctx, "Add Entry_X",.NONE, {.ALIGN_CENTER}) {
-					// 	app_state.command = .add_entry
-					// 	ui_state.scroll_state = 0
-					// }
-					// if .SUBMIT in mu.button(ctx, "View Vault_X",.NONE, {.ALIGN_CENTER}) {
-					// 	app_state.command = .view_vault
-					// 	ui_state.scroll_state = 0
-					// }
-					// if .SUBMIT in mu.button(ctx, "Update Entry_X",.NONE, {.ALIGN_CENTER}) {
-					// 	app_state.command = .update_entry
-					// 	ui_state.scroll_state = 0
-					// }
-					// if .SUBMIT in mu.button(ctx, "Delete Entry_X",.NONE, {.ALIGN_CENTER}) {
-					// 	app_state.command = .delete_entry
-					// 	ui_state.scroll_state = 0
-					// }
-					// if app_state.vault_synced {
-	
-					// } else {
-					// 	get_latest_vault(vault, app_state.user_id)
-					// }
 				}
 				case .view_vault: {
-					
-					if vault.locked {
-						
+					if vault.is_locked {
 						mu.layout_row(
 							ctx, 
 							{measure_text_width(ctx.style.font, "VAULT IS LOCKED. ENTER PASSWORD")*2},
 							measure_text_height(ctx.style.font)*2,
 						)
 						mu.label(ctx, "VAULT IS LOCKED. ENTER PASSWORD")
-						password_box_result := mu.textbox(ctx, app_state.ui_state.password_text_buffer[:], &app_state.ui_state.password_text_len, opt = {.ALIGN_CENTER}, local_style = .PasswordText)
-						mu.set_focus(ctx, ctx.last_id)
+						password_box_result := mu.textbox(ctx, ui.password_text_buffer[:], &ui.password_text_len, opt = {.ALIGN_CENTER}, local_style = .PasswordText)
+						if entering_password_starting {
+							mu.set_focus(ctx, ctx.last_id)
+							entering_password_starting = false
+						}
 						if .SUBMIT in password_box_result {
-							if entering_password_starting {
-								entering_password_starting = false
-							}
-							password := strings.clone_from_bytes(app_state.ui_state.password_text_buffer[:app_state.ui_state.password_text_len])
+							password := strings.clone_from_bytes(ui.password_text_buffer[:ui.password_text_len])
 							open_vault(vault, password)
 							app_state.password = password
+							clear_text_buffers(app_state)
 						}
 					} else {
-						
 						for i in 0..<vault.number_of_entries {
 							mu.layout_row(
 								ctx,
@@ -284,8 +248,9 @@ ez_app_windows :: proc(ui_state: ^UiState, app_state: ^AppState) {
 								},
 								measure_text_height(ctx.style.font)*2
 								)
-
-							if .SUBMIT in mu.button(ctx, ss.as_string(&vault.entries[i].id)) {}
+							if .SUBMIT in mu.button(ctx, ss.as_string(&vault.entries[i].id)) {
+								app_state.command = .edit_entry;
+							}
 							{mu.layout_column(ctx)
 								mu.layout_row(ctx, {200}, measure_text_height(ctx.style.font)+10)
 								mu.push_id_string(ctx, ss.as_string(&vault.entries[i].username))
@@ -312,16 +277,16 @@ ez_app_windows :: proc(ui_state: ^UiState, app_state: ^AppState) {
 					}
 					{mu.layout_column(ctx)
 						mu.layout_row(ctx, {300}, 40)
-						if .SUBMIT in mu.textbox(ctx, app_state.ui_state.entry_id_text_state.buf[:], &app_state.ui_state.entry_id_text_state.len) {
+						if .SUBMIT in mu.textbox(ctx, ui.entry_id_text_state.buf[:], &ui.entry_id_text_state.len) {
 							
 						}
-						if .SUBMIT in mu.textbox(ctx, app_state.ui_state.username_text_state.buf[:], &app_state.ui_state.username_text_state.len) {
+						if .SUBMIT in mu.textbox(ctx, ui.username_text_state.buf[:], &ui.username_text_state.len) {
 							
 						}
-						if .SUBMIT in mu.textbox(ctx, app_state.ui_state.password_text_state.buf[:], &app_state.ui_state.password_text_state.len) {
+						if .SUBMIT in mu.textbox(ctx, ui.password_text_state.buf[:], &ui.password_text_state.len) {
 							
 						}
-						if .SUBMIT in mu.textbox(ctx, app_state.ui_state.note_text_state.buf[:], &app_state.ui_state.note_text_state.len) {
+						if .SUBMIT in mu.textbox(ctx, ui.note_text_state.buf[:], &ui.note_text_state.len) {
 							
 						}
 					}
@@ -329,11 +294,36 @@ ez_app_windows :: proc(ui_state: ^UiState, app_state: ^AppState) {
 				case .delete_entry: {
 	
 				}
-				case .update_entry: {
-	
+				case .edit_entry: {
+					mu.layout_row(ctx, {300, 100, 100}, 100)
+					{mu.layout_column(ctx)
+						mu.layout_row(ctx, {300}, 40)
+						mu.label(ctx, "Entry ID")
+						mu.label(ctx, "Username")
+						mu.label(ctx, "Password")
+						mu.label(ctx, "Note")
+					}
+					{mu.layout_column(ctx)
+						mu.layout_row(ctx, {300}, 40)
+						if .SUBMIT in mu.textbox(ctx, ui.entry_id_text_state.buf[:], &ui.entry_id_text_state.len) {
+							
+						}
+						if .SUBMIT in mu.textbox(ctx, ui.username_text_state.buf[:], &ui.username_text_state.len) {
+							
+						}
+						if .SUBMIT in mu.textbox(ctx, ui.password_text_state.buf[:], &ui.password_text_state.len) {
+							
+						}
+						if .SUBMIT in mu.textbox(ctx, ui.note_text_state.buf[:], &ui.note_text_state.len) {
+							
+						}
+					}
 				}
 				case .entering_password: {
 	
+				}
+				case .main_menu: {
+
 				}
 	
 			}
@@ -341,7 +331,7 @@ ez_app_windows :: proc(ui_state: ^UiState, app_state: ^AppState) {
 
 		mu.end(ctx)
 
-		render(ui_state)
+		render(ui)
 	}
 }
 
@@ -349,14 +339,13 @@ main :: proc() {
 
 	app_state := new(AppState)
 
-    ui_state := new(UiState)
-	initialize_ui_state(ui_state)
+	initialize_ui(&app_state.ui_state)
 
-	ui_state.bg = {90, 95, 100, 255}
-    initialize_renderer(ui_state)
-    defer destroy_renderer(ui_state)
+	app_state.ui_state.bg = {90, 95, 100, 255}
+    initialize_renderer(&app_state.ui_state)
+    defer destroy_renderer(&app_state.ui_state)
 	defer clear_clipboard("Clipboard was cleared by EzPassMan. You're welcome ;)")
-    ez_app_windows(ui_state, app_state)
+    ez_app_windows(app_state)
 
 }
 
