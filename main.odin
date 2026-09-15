@@ -8,11 +8,27 @@ import "core:thread"
 import "core:sync"
 import "core:time"
 import "core:slice"
+import "base:intrinsics"
 
 import "core:nbio"
 
 import mu "microui_modified"
 import ss "smallstrings"
+
+
+RowTable :: struct($N: int, $K: typeid, $V: typeid) where intrinsics.type_is_comparable(K) {
+	[N]Row(K, V)
+}
+
+Row :: struct($K: typeid, $V: typeid) where intrinsics.type_is_comparable(K) {
+	key: K,
+	value: V,
+}
+
+ColumnTable :: struct($N: int, $K: typeid, $V: typeid) where intrinsics.type_is_comparable(K) {
+	[N]K,
+	[N]V,
+}
 
 
 SubCommand :: enum {
@@ -45,8 +61,9 @@ AppState :: struct {
     ui_state: UiState,
 }
 
+
 UiState :: struct {
-    mu_ctx: mu.Context,
+	mu_ctx: mu.Context,
     log_buf:         [1<<16]byte,
     log_buf_len:     int,
     log_buf_updated: bool,
@@ -59,22 +76,56 @@ UiState :: struct {
     mouse_buttons_map : [mu.Mouse]MouseButton,
     screen_texture: RenderTexture2D,
 	font: Font,
-	scale_text_buffer : [4]u8,
-	scale_text_len : int,
-	password_text_buffer: [1024]u8,
-	password_text_len: int,
 	scroll_state: f32,
-	entry_id_text_state: TextBox_State,
-	username_text_state: TextBox_State,
-	password_text_state: TextBox_State,
-	note_text_state: TextBox_State,
-	filter_text_state: TextBox_State,
+	text_bufs: [BufId]TextBox_State,
+	filter_checkbox: FilterState,
+	b: bool,
+	// scale_text_buffer : TextBox_State,
+	// password_text_buffer: TextBox_State,
+	// entry_id_text_state: TextBox_State,
+	// username_text_state: TextBox_State,
+	// password_text_state: TextBox_State,
+	// note_text_state: TextBox_State,
+	// filter_text_state: TextBox_State,
 }
 
+FilterState :: enum {
+	contains,
+	starts_with,
+	ends_with,
+}
+
+BufId :: enum {
+	scale,
+	password,
+	entry_id,
+	username,
+	note,
+	filter,
+}
+
+clear_text_buffers :: proc(ui: ^UiState) {
+	for &buffer in ui.text_bufs {
+		zero_text_buffer(&buffer)
+	}
+	// zero_text_buffer(&ui.scale_text_buffer )
+	// zero_text_buffer(&ui.password_text_buffer)
+	// zero_text_buffer(&ui.entry_id_text_state)
+	// zero_text_buffer(&ui.username_text_state)
+	// zero_text_buffer(&ui.password_text_state)
+	// zero_text_buffer(&ui.note_text_state)
+	// zero_text_buffer(&ui.filter_text_state)
+}
 TextBox_State :: struct {
 	buf: [255]u8,
 	len: int,
 }
+
+zero_text_buffer :: proc(text_buffer: ^TextBox_State) {
+	slice.zero(text_buffer.buf[:])
+	text_buffer.len = 0
+}
+
 
 initialize_ui :: proc(state: ^UiState) {
 	state.key_map = [mu.Key][2]KeyboardKey{
@@ -100,6 +151,8 @@ initialize_ui :: proc(state: ^UiState) {
 		.MIDDLE  = .MIDDLE,
 	}
 
+		
+
 	state.screen_height = 540
 	state.screen_width = 1024
 }
@@ -117,15 +170,15 @@ set_ui_scale :: proc(state: ^UiState) {
 		measure_text_height(ctx.style.font),
 	)
 	mu.label(ctx, "Set ui scale")
-	if .SUBMIT in mu.textbox(ctx, state.scale_text_buffer[:], &state.scale_text_len, opt = {.NO_SCROLL}) {
+	if .SUBMIT in mu.textbox(ctx, state.text_bufs[.scale].buf[:], &state.text_bufs[.scale].len, opt = {.NO_SCROLL}) {
 		mu.set_focus(ctx, ctx.last_id)
-		str := transmute(string)state.scale_text_buffer[:state.scale_text_len]
+		str := transmute(string)state.text_bufs[.scale].buf[:state.text_bufs[.scale].len]
 		scale, ok := strconv.parse_int(str)
 		if ok {
 			state.font.font_scale = f32(scale)/10
 		} else {
 		}
-		state.scale_text_len = 0
+		state.text_bufs[.scale].len = 0
 	}
 	mu.label(ctx, "")
 
@@ -141,9 +194,7 @@ BackgroundData :: struct {
 	user_id: KeyString,
 }
 
-clear_text_buffers :: proc() {
-	
-}
+
 
 ez_app_windows :: proc(app_state: ^AppState) {
 	ctx := &app_state.ui_state.mu_ctx
@@ -192,7 +243,23 @@ ez_app_windows :: proc(app_state: ^AppState) {
 						lock_vault(vault, app_state.password)
 					}
 				}
-				mu.textbox(ctx, ui.filter_text_state.buf[:], &ui.filter_text_state.len)
+				mu.label(ctx, "Filter by")
+				mu.textbox(ctx, ui.text_bufs[.filter].buf[:], &ui.text_bufs[.filter].len)
+				mu.layout_row(ctx, {200}, 50)
+				starts_with := ui.filter_checkbox == FilterState.starts_with
+				contains := ui.filter_checkbox == FilterState.contains
+				ends_with := ui.filter_checkbox == FilterState.ends_with
+
+				if .CHANGE in mu.checkbox(ctx, "Starts with", &starts_with, local_style = .RadioButton) {
+					ui.filter_checkbox = .starts_with
+				}
+				if .CHANGE in mu.checkbox(ctx, "Contains", &contains, local_style = .RadioButton) {
+					ui.filter_checkbox = .contains
+
+				}
+				if .CHANGE in mu.checkbox(ctx, "Ends with", &ends_with, local_style = .RadioButton) {
+					ui.filter_checkbox = .ends_with
+				}
 			}
 		} // -------------------------End of side panel -----------------------------------------------------
 
@@ -227,16 +294,16 @@ ez_app_windows :: proc(app_state: ^AppState) {
 							measure_text_height(ctx.style.font)*2,
 						)
 						mu.label(ctx, "VAULT IS LOCKED. ENTER PASSWORD")
-						password_box_result := mu.textbox(ctx, ui.password_text_buffer[:], &ui.password_text_len, opt = {.ALIGN_CENTER}, local_style = .PasswordText)
+						password_box_result := mu.textbox(ctx, ui.text_bufs[.password].buf[:], &ui.text_bufs[.password].len, opt = {.ALIGN_CENTER}, local_style = .PasswordText)
 						if entering_password_starting {
 							mu.set_focus(ctx, ctx.last_id)
 							entering_password_starting = false
 						}
 						if .SUBMIT in password_box_result {
-							password := strings.clone_from_bytes(ui.password_text_buffer[:ui.password_text_len])
+							password := strings.clone_from_bytes(ui.text_bufs[.password].buf[:ui.text_bufs[.password].len])
 							open_vault(vault, password)
 							app_state.password = password
-							clear_text_buffers(app_state)
+							clear_text_buffers(ui)
 						}
 					} else {
 						for i in 0..<vault.number_of_entries {
@@ -277,16 +344,16 @@ ez_app_windows :: proc(app_state: ^AppState) {
 					}
 					{mu.layout_column(ctx)
 						mu.layout_row(ctx, {300}, 40)
-						if .SUBMIT in mu.textbox(ctx, ui.entry_id_text_state.buf[:], &ui.entry_id_text_state.len) {
+						if .SUBMIT in mu.textbox(ctx, ui.text_bufs[.entry_id].buf[:], &ui.text_bufs[.entry_id].len) {
 							
 						}
-						if .SUBMIT in mu.textbox(ctx, ui.username_text_state.buf[:], &ui.username_text_state.len) {
+						if .SUBMIT in mu.textbox(ctx, ui.text_bufs[.username].buf[:], &ui.text_bufs[.username].len) {
 							
 						}
-						if .SUBMIT in mu.textbox(ctx, ui.password_text_state.buf[:], &ui.password_text_state.len) {
+						if .SUBMIT in mu.textbox(ctx, ui.text_bufs[.password].buf[:], &ui.text_bufs[.password].len) {
 							
 						}
-						if .SUBMIT in mu.textbox(ctx, ui.note_text_state.buf[:], &ui.note_text_state.len) {
+						if .SUBMIT in mu.textbox(ctx, ui.text_bufs[.note].buf[:], &ui.text_bufs[.note].len) {
 							
 						}
 					}
@@ -305,16 +372,16 @@ ez_app_windows :: proc(app_state: ^AppState) {
 					}
 					{mu.layout_column(ctx)
 						mu.layout_row(ctx, {300}, 40)
-						if .SUBMIT in mu.textbox(ctx, ui.entry_id_text_state.buf[:], &ui.entry_id_text_state.len) {
+						if .SUBMIT in mu.textbox(ctx, ui.text_bufs[.entry_id].buf[:], &ui.text_bufs[.entry_id].len) {
 							
 						}
-						if .SUBMIT in mu.textbox(ctx, ui.username_text_state.buf[:], &ui.username_text_state.len) {
+						if .SUBMIT in mu.textbox(ctx, ui.text_bufs[.username].buf[:], &ui.text_bufs[.username].len) {
 							
 						}
-						if .SUBMIT in mu.textbox(ctx, ui.password_text_state.buf[:], &ui.password_text_state.len) {
+						if .SUBMIT in mu.textbox(ctx, ui.text_bufs[.password].buf[:], &ui.text_bufs[.password].len) {
 							
 						}
-						if .SUBMIT in mu.textbox(ctx, ui.note_text_state.buf[:], &ui.note_text_state.len) {
+						if .SUBMIT in mu.textbox(ctx, ui.text_bufs[.note].buf[:], &ui.text_bufs[.note].len) {
 							
 						}
 					}

@@ -143,20 +143,20 @@ initialize_renderer :: proc(state: ^UiState) {
 	
 	ctx.style.font = transmute(mu.Font)(&state.font)
 
-	// state.atlas_texture = rl.LoadRenderTexture(c.int(mu.DEFAULT_ATLAS_WIDTH), c.int(mu.DEFAULT_ATLAS_HEIGHT))
+	state.atlas_texture = rl.LoadRenderTexture(c.int(mu.DEFAULT_ATLAS_WIDTH), c.int(mu.DEFAULT_ATLAS_HEIGHT))
     
-	// state.image = rl.GenImageColor(c.int(mu.DEFAULT_ATLAS_WIDTH), c.int(mu.DEFAULT_ATLAS_HEIGHT), rl.Color{0, 0, 0, 0})
+	state.image = rl.GenImageColor(c.int(mu.DEFAULT_ATLAS_WIDTH), c.int(mu.DEFAULT_ATLAS_HEIGHT), rl.Color{0, 0, 0, 0})
     
-	// for alpha, i in mu.default_atlas_alpha {
-    //     x := i % mu.DEFAULT_ATLAS_WIDTH
-	// 	y := i / mu.DEFAULT_ATLAS_WIDTH
-	// 	color := rl.Color{255, 255, 255, alpha}
-	// 	rl.ImageDrawPixel(&state.image, c.int(x), c.int(y), color)
-	// }
+	for alpha, i in mu.default_atlas_alpha {
+        x := i % mu.DEFAULT_ATLAS_WIDTH
+		y := i / mu.DEFAULT_ATLAS_WIDTH
+		color := rl.Color{255, 255, 255, alpha}
+		rl.ImageDrawPixel(&state.image, c.int(x), c.int(y), color)
+	}
     
-	// rl.BeginTextureMode(state.atlas_texture)
-	// rl.UpdateTexture(state.atlas_texture.texture, rl.LoadImageColors(state.image))
-	// rl.EndTextureMode()
+	rl.BeginTextureMode(state.atlas_texture)
+	rl.UpdateTexture(state.atlas_texture.texture, rl.LoadImageColors(state.image))
+	rl.EndTextureMode()
     
 	state.screen_texture = rl.LoadRenderTexture(state.screen_width, state.screen_height)
 }
@@ -225,10 +225,14 @@ render :: proc (state: ^UiState) {
 				rl.DrawRectangleLines(cmd.rect.x, cmd.rect.y, cmd.rect.w, cmd.rect.h, to_rl_color(mu.Color{0,0,0,255}))
 			}
 		case ^mu.Command_Icon:
-			src := mu.default_atlas[cmd.id]
-			x := cmd.rect.x + (cmd.rect.w - src.w)/2
-			y := cmd.rect.y + (cmd.rect.h - src.h)/2
-			render_texture(state.screen_texture, &rl.Rectangle {f32(x), f32(y), 0, 0}, src, to_rl_color(cmd.color), state)
+			if cmd.local_style == .RadioButton {
+				rl.DrawCircle(cmd.rect.x + (cmd.rect.w)/2, cmd.rect.y + (cmd.rect.h)/2, 10, to_rl_color(ctx.style.colors[.TEXT]))
+			} else {
+				src := mu.default_atlas[cmd.id]
+				x := cmd.rect.x + (cmd.rect.w - src.w)/2
+				y := cmd.rect.y + (cmd.rect.h - src.h)/2
+				render_texture(state.screen_texture, &rl.Rectangle {f32(x), f32(y), 0, 0}, src, to_rl_color(cmd.color), state)
+			}
 		case ^mu.Command_Clip:
 			rl.BeginScissorMode(cmd.rect.x, height - (cmd.rect.y + cmd.rect.h), cmd.rect.w, cmd.rect.h)
 		case ^mu.Command_Jump:

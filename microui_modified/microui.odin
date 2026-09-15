@@ -161,6 +161,7 @@ LocalStyle :: enum {
 	PasswordText,
 	Bordered,
 	Cursor,
+	RadioButton
 }
 Command_Rect :: struct { 
 	using command: Command, 
@@ -181,6 +182,7 @@ Command_Icon :: struct {
 	rect:  Rect, 
 	id:    Icon, 
 	color: Color,
+	local_style: LocalStyle,
 }
 
 
@@ -712,7 +714,7 @@ draw_text :: proc(ctx: ^Context, font: Font, str: string, pos: Vec2, color: Colo
 	}
 }
 
-draw_icon :: proc(ctx: ^Context, id: Icon, rect: Rect, color: Color) {
+draw_icon :: proc(ctx: ^Context, id: Icon, rect: Rect, color: Color, local_style: LocalStyle = .None) {
 	/* do clip command if the rect isn't fully contained within the cliprect */
 	clipped := check_clip(ctx, rect)
 	switch clipped {
@@ -725,6 +727,7 @@ draw_icon :: proc(ctx: ^Context, id: Icon, rect: Rect, color: Color) {
 	cmd.id = id
 	cmd.rect = rect
 	cmd.color = color
+	cmd.local_style = local_style
 	/* reset clipping if it was set */
 	if clipped != .NONE {
 		set_clip(ctx, unclipped_rect)
@@ -978,20 +981,21 @@ button :: proc(ctx: ^Context, label: string, icon: Icon = .NONE, opt: Options = 
 	return
 }
 
-checkbox :: proc(ctx: ^Context, label: string, state: ^bool) -> (res: Result_Set) {
+checkbox :: proc(ctx: ^Context, label: string, state: ^bool, local_style: LocalStyle = .None) -> (res: Result_Set) {
 	id := get_id(ctx, uintptr(state))
 	r := layout_next(ctx)
 	box := Rect{r.x, r.y, r.h, r.h}
 	update_control(ctx, id, r, {})
 	/* handle click */
 	if .LEFT in ctx.mouse_released_bits && ctx.hover_id == id {
+		fmt.println("HERE")
 		res += {.CHANGE}
 		state^ = !state^
 	}
 	/* draw */
 	draw_control_frame(ctx, id, box, .BASE, {})
 	if state^ {
-		draw_icon(ctx, .CHECK, box, ctx.style.colors[.TEXT])
+		draw_icon(ctx, .CHECK, box, ctx.style.colors[.TEXT], local_style = local_style)
 	}
 	r = Rect{r.x + box.w, r.y, r.w - box.w, r.h}
 	draw_control_text(ctx, label, r, .TEXT)
