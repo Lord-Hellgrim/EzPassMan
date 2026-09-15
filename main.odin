@@ -255,7 +255,6 @@ ez_app_windows :: proc(app_state: ^AppState) {
 				}
 				if .CHANGE in mu.checkbox(ctx, "Contains", &contains, local_style = .RadioButton) {
 					ui.filter_checkbox = .contains
-
 				}
 				if .CHANGE in mu.checkbox(ctx, "Ends with", &ends_with, local_style = .RadioButton) {
 					ui.filter_checkbox = .ends_with
@@ -307,6 +306,25 @@ ez_app_windows :: proc(app_state: ^AppState) {
 						}
 					} else {
 						for i in 0..<vault.number_of_entries {
+							entry_id: string = strings.clone_from_bytes(vault.entries[i].id.data[:vault.entries[i].id.len], allocator = context.temp_allocator)
+							filter := strings.clone_from_bytes(ui.text_bufs[.filter].buf[:ui.text_bufs[.filter].len], allocator = context.temp_allocator)
+							switch ui.filter_checkbox {
+								case .contains: {
+									if !strings.contains(entry_id, filter) {
+										continue
+									}
+								}
+								case .starts_with: {
+									if !strings.starts_with(entry_id, filter) {
+										continue
+									}
+								}
+								case .ends_with: {
+									if !strings.ends_with(entry_id, filter) {
+										continue
+									}
+								}
+							}
 							mu.layout_row(
 								ctx,
 								{
