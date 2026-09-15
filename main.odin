@@ -151,22 +151,19 @@ initialize_ui :: proc(state: ^UiState) {
 		.MIDDLE  = .MIDDLE,
 	}
 
-		
-
 	state.screen_height = 540
 	state.screen_width = 1024
 }
 
-uiw :: proc(state: UiState, x: i32) -> i32 {
-	return state.screen_width/100 * x * i32(state.font.font_scale)/100*x
+uiw :: proc(state: ^UiState, x: f32) -> i32 {
+	return i32(x*f32(state.screen_width))
 }
-
 
 set_ui_scale :: proc(state: ^UiState) {
 	ctx := &state.mu_ctx
 	mu.layout_row(
 		ctx,
-		{uiw(state^, 50), state.screen_width/8},
+		{uiw(state, 50), state.screen_width/8},
 		measure_text_height(ctx.style.font),
 	)
 	mu.label(ctx, "Set ui scale")
@@ -181,7 +178,6 @@ set_ui_scale :: proc(state: ^UiState) {
 		state.text_bufs[.scale].len = 0
 	}
 	mu.label(ctx, "")
-
 }
 
 load_latest_vault_task :: proc(task: thread.Task) {
@@ -194,19 +190,11 @@ BackgroundData :: struct {
 	user_id: KeyString,
 }
 
-
-
 ez_app_windows :: proc(app_state: ^AppState) {
 	ctx := &app_state.ui_state.mu_ctx
 	ui := &app_state.ui_state
 
 	user_input := new(UserInput)
-
-	text_buffer : [256]u8
-	text_buffer_len : int
-
-	scale_text_buffer : [4]u8
-	scale_text_buffer_len : int
 
 	vault := make_sample_vault()
 
@@ -214,16 +202,22 @@ ez_app_windows :: proc(app_state: ^AppState) {
 	entering_password_starting := true
 
 	panel_split: i32 = 5
-	panel_width := ui.screen_width / panel_split
-
+	
+	// loc: i32 = 0
 	for !WindowShouldClose() {
+		// loc += 1
 		free_all(context.temp_allocator)
 		process_user_input(user_input, ui)
+		
+		ui.screen_width = get_screen_width()
+		ui.screen_height = get_screen_height()
+		
+		panel_width := ui.screen_width / panel_split
 
 		mu.begin(ctx)
 
 		{//------------------------------------- Side Panel -----------------------------------------------
-			mu.begin_window(ctx, "Side panel", mu.Rect{0,0,panel_width, ui.screen_height}, opt = {.NO_SCROLL, .NO_INTERACT, .NO_TITLE}) 
+			mu.begin_window(ctx, "Side panel", mu.Rect{0,0,uiw(ui, 0.2), ui.screen_height}, opt = {.NO_CLOSE, .NO_TITLE}) 
 			defer mu.end_window(ctx)
 
 			if app_state.command == .start {
@@ -231,12 +225,19 @@ ez_app_windows :: proc(app_state: ^AppState) {
 			} else {
 				mu.layout_row(
 					ctx,
-					{measure_text_width(ctx.style.font, "Add Entry")*2},
-					measure_text_height(ctx.style.font)
+					{uiw(ui, 0.15)},
+					measure_text_height(ctx.style.font)*2
 				)
-				if .SUBMIT in mu.button(ctx, "Add Entry",.NONE, {}) {
-					app_state.command = .add_entry
-					ui.scroll_state = 0
+				if app_state.command == .view_vault {
+					if .SUBMIT in mu.button(ctx, "Add Entry",.NONE, {}) {
+						app_state.command = .add_entry
+						ui.scroll_state = 0
+					}
+				} else {
+					if .SUBMIT in mu.button(ctx, "View Vault",.NONE, {}) {
+						app_state.command = .view_vault
+						ui.scroll_state = 0
+					}
 				}
 				if !vault.is_locked {
 					if .SUBMIT in mu.button(ctx, "Lock Vault", .NONE, {}) {
@@ -245,7 +246,7 @@ ez_app_windows :: proc(app_state: ^AppState) {
 				}
 				mu.label(ctx, "Filter by")
 				mu.textbox(ctx, ui.text_bufs[.filter].buf[:], &ui.text_bufs[.filter].len)
-				mu.layout_row(ctx, {200}, 50)
+				mu.layout_row(ctx, {uiw(ui, 0.19)}, 50)
 				starts_with := ui.filter_checkbox == FilterState.starts_with
 				contains := ui.filter_checkbox == FilterState.contains
 				ends_with := ui.filter_checkbox == FilterState.ends_with
@@ -262,25 +263,25 @@ ez_app_windows :: proc(app_state: ^AppState) {
 			}
 		} // -------------------------End of side panel -----------------------------------------------------
 
-		if mu.window(ctx, "START", mu.Rect{panel_width, 0 , panel_width*(panel_split-1), ui.screen_height}, {.NO_RESIZE, .NO_CLOSE, .NO_INTERACT, .NO_TITLE}) {
+		if mu.window(ctx, "START", mu.Rect{uiw(ui, 0.2), 0 , uiw(ui, 0.8), ui.screen_height}, {.NO_CLOSE,}) {
 			switch app_state.command {
 				case .start: {
 					mu.layout_row(
 						ctx,
 						{
-							measure_text_width(ctx.style.font, "Enter User Id")*2,
+							uiw(ui, 0.4),
 						},
 						measure_text_height(ctx.style.font),
 					)
 					mu.label(ctx, "Enter User id")
-					res := mu.textbox(ctx, text_buffer[:], &text_buffer_len, {.ALIGN_CENTER})
+					res := mu.textbox(ctx, ui.text_bufs[.username].buf[:], &ui.text_bufs[.username].len, {.ALIGN_CENTER})
 					if starting {
 						mu.set_focus(ctx, ctx.last_id)
 						starting = false
 					}
 					if .SUBMIT in res{
 						mu.set_focus(ctx, ctx.last_id)
-						text_buffer_len = 0
+						zero_text_buffer(&ui.text_bufs[.username])
 						app_state.command = .view_vault
 						ui.scroll_state = 0
 					}
@@ -289,7 +290,7 @@ ez_app_windows :: proc(app_state: ^AppState) {
 					if vault.is_locked {
 						mu.layout_row(
 							ctx, 
-							{measure_text_width(ctx.style.font, "VAULT IS LOCKED. ENTER PASSWORD")*2},
+							{uiw(ui, 0.8)},
 							measure_text_height(ctx.style.font)*2,
 						)
 						mu.label(ctx, "VAULT IS LOCKED. ENTER PASSWORD")

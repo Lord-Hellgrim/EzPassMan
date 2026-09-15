@@ -1434,7 +1434,7 @@ begin_window :: proc(ctx: ^Context, title: string, rect: Rect, opt := Options{})
 		cnt.rect = rect
 	}
 	begin_root_container(ctx, cnt)
-	rect = cnt.rect
+	// rect = cnt.rect
 	body := cnt.rect
 
 	/* draw frame */
