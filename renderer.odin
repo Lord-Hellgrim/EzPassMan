@@ -39,18 +39,18 @@ Font :: struct {
 process_user_input :: proc(user_input: ^UserInput, state: ^UiState) {
 	ctx := &state.mu_ctx
 
-	state.screen_height = rl.GetScreenHeight()
-	state.screen_width = rl.GetScreenWidth()
-
+	if rl.IsWindowResized() {
+		state.screen_height = rl.GetScreenHeight()
+		state.screen_width = rl.GetScreenWidth()
+		rl.UnloadRenderTexture(state.screen_texture)
+		state.screen_texture = rl.LoadRenderTexture(state.screen_width, state.screen_height)
+	}
+	
     mouse := rl.GetMousePosition()
     user_input.mouse_x = i32(mouse.x)
     user_input.mouse_y = i32(mouse.y)
 	mu.input_mouse_move(ctx, user_input.mouse_x, user_input.mouse_y)
-
-	if rl.IsWindowResized() {
-		rl.UnloadRenderTexture(state.screen_texture)
-		state.screen_texture = rl.LoadRenderTexture(state.screen_width, state.screen_height)
-	}
+	
 
 	mouse_wheel_pos := rl.GetMouseWheelMoveV()
 	mu.input_scroll(ctx, i32(mouse_wheel_pos.x) * 30, i32(mouse_wheel_pos.y) * -30)
@@ -192,10 +192,10 @@ render :: proc (state: ^UiState) {
 		return {in_color.r, in_color.g, in_color.b, in_color.a}
 	}
 
-	height := rl.GetScreenHeight()
+	// height := state.screen_height
 
-	rl.BeginTextureMode(state.screen_texture)
 	rl.EndScissorMode()
+	rl.BeginTextureMode(state.screen_texture)
 	rl.ClearBackground(to_rl_color(state.bg))
 
 	command_backing: ^mu.Command
@@ -216,15 +216,6 @@ render :: proc (state: ^UiState) {
 				actual_font.font_scale,
 				rl.WHITE,
 			)
-			// dst := rl.Rectangle{f32(cmd.pos.x), f32(cmd.pos.y), 0, 0}
-			// for ch in cmd.str {
-			// 	if ch&0xc0 != 0x80 {
-			// 		r := min(int(ch), 127)
-			// 		src := mu.default_atlas[mu.DEFAULT_ATLAS_FONT + r]
-			// 		render_texture(state.screen_texture, &dst, src, to_rl_color(cmd.color), state)
-			// 		dst.x += dst.width
-			// 	}
-			// }
 		case ^mu.Command_Rect:
 			// rl.DrawRectangleRounded(rl.Rectangle{f32(cmd.rect.x), f32(cmd.rect.y), f32(cmd.rect.w), f32(cmd.rect.h)}, 10, 5, to_rl_color(cmd.color))
 			rl.DrawRectangle(cmd.rect.x, cmd.rect.y, cmd.rect.w, cmd.rect.h, to_rl_color(cmd.color))
@@ -241,7 +232,7 @@ render :: proc (state: ^UiState) {
 				render_texture(state.screen_texture, &rl.Rectangle {f32(x), f32(y), 0, 0}, src, to_rl_color(cmd.color), state)
 			}
 		case ^mu.Command_Clip:
-			rl.BeginScissorMode(cmd.rect.x, height - (cmd.rect.y + cmd.rect.h), cmd.rect.w, cmd.rect.h)
+			rl.BeginScissorMode(cmd.rect.x, cmd.rect.y/*height - (cmd.rect.y + cmd.rect.h)*/, cmd.rect.w, cmd.rect.h)
 		case ^mu.Command_Jump:
 			unreachable()
 		}

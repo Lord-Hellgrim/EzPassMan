@@ -5,7 +5,7 @@ import "core:fmt"
 import "core:strconv"
 import "core:strings"
 import "core:thread"
-import "core:sync"
+import "core:crypto"
 import "core:time"
 import "core:slice"
 import "base:intrinsics"
@@ -79,7 +79,7 @@ UiState :: struct {
 	scroll_state: f32,
 	text_bufs: [BufId]TextBox_State,
 	filter_checkbox: FilterState,
-	b: bool,
+	password_gen_boxes: PassGenState,
 	// scale_text_buffer : TextBox_State,
 	// password_text_buffer: TextBox_State,
 	// entry_id_text_state: TextBox_State,
@@ -87,12 +87,6 @@ UiState :: struct {
 	// password_text_state: TextBox_State,
 	// note_text_state: TextBox_State,
 	// filter_text_state: TextBox_State,
-}
-
-FilterState :: enum {
-	contains,
-	starts_with,
-	ends_with,
 }
 
 BufId :: enum {
@@ -120,6 +114,21 @@ TextBox_State :: struct {
 	buf: [255]u8,
 	len: int,
 }
+
+FilterState :: enum {
+	contains,
+	starts_with,
+	ends_with,
+}
+
+PassGenState :: struct {
+	numbers: b8,
+	special: b8,
+	uppers: b8,
+	len: u8
+}
+
+
 
 zero_text_buffer :: proc(text_buffer: ^TextBox_State) {
 	slice.zero(text_buffer.buf[:])
@@ -185,6 +194,42 @@ load_latest_vault_task :: proc(task: thread.Task) {
 	get_latest_vault(data.vault_ptr, data.user_id)
 }
 
+generate_password :: proc(ui: ^UiState) {
+    base := "abcdefghijklmnopqrstuvwxyz" //26
+    caps := "ABCDEFGHIJKLMNOPQRSTUVWXYZ" //26
+    numbers := "0123456789"				 //10
+    special :="!@#$%^&*()-_=+"			 //14
+
+	temp_buf : [255]u8
+	temp := temp_buf[:ui.password_gen_boxes.len]
+	
+	defer slice.zero(temp)
+	crypto.rand_bytes(temp)
+
+	zero_text_buffer(&ui.text_bufs[.password])
+
+	alphabet : EzString
+	ss.extend_with_string(&alphabet, base)
+	if ui.password_gen_boxes.uppers {
+		ss.extend_with_string(&alphabet, caps)
+	}
+	if ui.password_gen_boxes.numbers {
+		ss.extend_with_string(&alphabet, numbers)		
+	}
+	if ui.password_gen_boxes.special {
+		ss.extend_with_string(&alphabet, special)
+	}
+
+	for i in 0..<len(temp) {
+		infinity_guard := 0
+		for temp[i] > 255 - (255 % alphabet.len) && infinity_guard < 10_000 {
+			crypto.rand_bytes(temp[i:i])
+			infinity_guard += 1
+		}
+		ui.text_bufs[.password].buf[i] = alphabet.data[u8(i) % alphabet.len]
+	}
+}
+
 BackgroundData :: struct {
 	vault_ptr: ^Vault,
 	user_id: KeyString,
@@ -216,8 +261,9 @@ ez_app_windows :: proc(app_state: ^AppState) {
 
 		mu.begin(ctx)
 
+
 		{//------------------------------------- Side Panel -----------------------------------------------
-			mu.begin_window(ctx, "Side panel", mu.Rect{0,0,uiw(ui, 0.2), ui.screen_height}, opt = {.NO_CLOSE, .NO_TITLE}) 
+			mu.begin_window(ctx, "Side panel", mu.Rect{0,0,uiw(ui, 0.2), ui.screen_height}, opt = {.NO_CLOSE, .NO_INTERACT, .NO_TITLE}) 
 			defer mu.end_window(ctx)
 
 			if app_state.command == .start {
@@ -263,7 +309,7 @@ ez_app_windows :: proc(app_state: ^AppState) {
 			}
 		} // -------------------------End of side panel -----------------------------------------------------
 
-		if mu.window(ctx, "START", mu.Rect{uiw(ui, 0.2), 0 , uiw(ui, 0.8), ui.screen_height}, {.NO_CLOSE,}) {
+		if mu.window(ctx, "START", mu.Rect{uiw(ui, 0.2), 0 , uiw(ui, 0.8), ui.screen_height}, {.NO_CLOSE, .NO_INTERACT, .NO_TITLE}) {
 			switch app_state.command {
 				case .start: {
 					mu.layout_row(
@@ -363,17 +409,40 @@ ez_app_windows :: proc(app_state: ^AppState) {
 					}
 					{mu.layout_column(ctx)
 						mu.layout_row(ctx, {300}, 40)
-						if .SUBMIT in mu.textbox(ctx, ui.text_bufs[.entry_id].buf[:], &ui.text_bufs[.entry_id].len) {
-							
+
+						mu.textbox(ctx, ui.text_bufs[.entry_id].buf[:], &ui.text_bufs[.entry_id].len)
+						mu.textbox(ctx, ui.text_bufs[.username].buf[:], &ui.text_bufs[.username].len)
+						mu.textbox(ctx, ui.text_bufs[.password].buf[:], &ui.text_bufs[.password].len)
+						mu.textbox(ctx, ui.text_bufs[.note].buf[:], &ui.text_bufs[.note].len)
+
+						mu.layout_row(ctx, {uiw(ui, 0.19)}, 50)
+						starts_with := ui.filter_checkbox == FilterState.starts_with
+						contains := ui.filter_checkbox == FilterState.contains
+						ends_with := ui.filter_checkbox == FilterState.ends_with
+
+						if .CHANGE in mu.checkbox(ctx, "Starts with", &starts_with, local_style = .RadioButton) {
+							ui.filter_checkbox = .starts_with
 						}
-						if .SUBMIT in mu.textbox(ctx, ui.text_bufs[.username].buf[:], &ui.text_bufs[.username].len) {
-							
+						if .CHANGE in mu.checkbox(ctx, "Contains", &contains, local_style = .RadioButton) {
+							ui.filter_checkbox = .contains
 						}
-						if .SUBMIT in mu.textbox(ctx, ui.text_bufs[.password].buf[:], &ui.text_bufs[.password].len) {
-							
+						if .CHANGE in mu.checkbox(ctx, "Ends with", &ends_with, local_style = .RadioButton) {
+							ui.filter_checkbox = .ends_with
 						}
-						if .SUBMIT in mu.textbox(ctx, ui.text_bufs[.note].buf[:], &ui.text_bufs[.note].len) {
-							
+
+						if .SUBMIT in mu.button(ctx, "GENERATE PASSWORD") {
+							generate_password(ui)
+						}
+
+						if .SUBMIT in mu.button(ctx, "ADD") {
+							new_entry := Entry {
+								id = EzString{len = u8(ui.text_bufs[.entry_id].len), data = ui.text_bufs[.entry_id].buf},
+								username = EzString{len = u8(ui.text_bufs[.username].len), data = ui.text_bufs[.username].buf},
+								password = EzString{len = u8(ui.text_bufs[.password].len), data = ui.text_bufs[.password].buf},
+								note = EzString{len = u8(ui.text_bufs[.note].len), data = ui.text_bufs[.note].buf},
+							}
+							add_entry(vault, new_entry)
+							slice.sort_by_cmp(vault.entries[:], cmp_entries)
 						}
 					}
 				}

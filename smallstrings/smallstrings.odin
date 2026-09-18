@@ -36,7 +36,7 @@ extend_with_bytes :: proc(dst: ^SmallString($N), src: u8) {
 // Adds the first len bytes of src to dst.data. Bytes beyond the cap of dst are not copied.
 extend_with_string :: proc(dst: ^SmallString($N), src: string) {
     num_chars := len(src)
-    if num_chars > N - dst.len {
+    if num_chars > int(N - dst.len) {
         num_chars = N-dst.len
     }
     copy(dst[dst.len:], src[:num_chars])

@@ -90,6 +90,11 @@ Entry :: struct {
     note: EzString,
 }
 
+cmp_entries :: proc(i, j: Entry) -> slice.Ordering {
+    ord := slice.cmp(i.id, j.id)
+    return ord
+}
+
 NullEntry :: Entry{
     id = EzString{len = 0, data = 0},
     username = EzString{len = 0, data = 0},
