@@ -988,7 +988,6 @@ checkbox :: proc(ctx: ^Context, label: string, state: ^bool, local_style: LocalS
 	update_control(ctx, id, r, {})
 	/* handle click */
 	if .LEFT in ctx.mouse_released_bits && ctx.hover_id == id {
-		fmt.println("HERE")
 		res += {.CHANGE}
 		state^ = !state^
 	}

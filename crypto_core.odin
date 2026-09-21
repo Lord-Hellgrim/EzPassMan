@@ -6,6 +6,7 @@ import "core:crypto/aead"
 import "core:slice"
 import "core:fmt"
 import "core:mem"
+import "core:strings"
 
 import ss "smallstrings"
 
@@ -91,8 +92,18 @@ Entry :: struct {
 }
 
 cmp_entries :: proc(i, j: Entry) -> slice.Ordering {
-    ord := slice.cmp(i.id, j.id)
-    return ord
+    i, j := i, j
+    i_string := ss.as_string(&i.id)
+    j_string := ss.as_string(&j.id)
+
+
+    switch strings.compare(i_string, j_string) {
+        case -1: return .Less
+        case 0: return .Equal
+        case 1: return .Greater
+    }
+
+    return .Less
 }
 
 NullEntry :: Entry{

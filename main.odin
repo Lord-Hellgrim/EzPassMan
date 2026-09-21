@@ -122,10 +122,10 @@ FilterState :: enum {
 }
 
 PassGenState :: struct {
-	numbers: b8,
-	special: b8,
-	uppers: b8,
-	len: u8
+	numbers: bool,
+	special: bool,
+	uppers: bool,
+	len: f32
 }
 
 
@@ -162,6 +162,8 @@ initialize_ui :: proc(state: ^UiState) {
 
 	state.screen_height = 540
 	state.screen_width = 1024
+
+	state.password_gen_boxes.len = 20
 }
 
 uiw :: proc(state: ^UiState, x: f32) -> i32 {
@@ -201,7 +203,7 @@ generate_password :: proc(ui: ^UiState) {
     special :="!@#$%^&*()-_=+"			 //14
 
 	temp_buf : [255]u8
-	temp := temp_buf[:ui.password_gen_boxes.len]
+	temp := temp_buf[:int(ui.password_gen_boxes.len)]
 	
 	defer slice.zero(temp)
 	crypto.rand_bytes(temp)
@@ -219,15 +221,20 @@ generate_password :: proc(ui: ^UiState) {
 	if ui.password_gen_boxes.special {
 		ss.extend_with_string(&alphabet, special)
 	}
-
+	
+	fmt.println(temp)
 	for i in 0..<len(temp) {
 		infinity_guard := 0
-		for temp[i] > 255 - (255 % alphabet.len) && infinity_guard < 10_000 {
-			crypto.rand_bytes(temp[i:i])
+		for temp[i] > 255 - (255 % alphabet.len) {
+			assert(infinity_guard < 10_000, "infinity guard exceeded")
+			crypto.rand_bytes(temp[i:i+1])
 			infinity_guard += 1
 		}
-		ui.text_bufs[.password].buf[i] = alphabet.data[u8(i) % alphabet.len]
+		fmt.println("index: ", u8(i) % alphabet.len)
+		ui.text_bufs[.password].buf[i] = alphabet.data[temp[i] % alphabet.len]
+		ui.text_bufs[.password].len += 1
 	}
+	fmt.println(ui.text_bufs[.password])
 }
 
 BackgroundData :: struct {
@@ -415,24 +422,9 @@ ez_app_windows :: proc(app_state: ^AppState) {
 						mu.textbox(ctx, ui.text_bufs[.password].buf[:], &ui.text_bufs[.password].len)
 						mu.textbox(ctx, ui.text_bufs[.note].buf[:], &ui.text_bufs[.note].len)
 
-						mu.layout_row(ctx, {uiw(ui, 0.19)}, 50)
-						starts_with := ui.filter_checkbox == FilterState.starts_with
-						contains := ui.filter_checkbox == FilterState.contains
-						ends_with := ui.filter_checkbox == FilterState.ends_with
-
-						if .CHANGE in mu.checkbox(ctx, "Starts with", &starts_with, local_style = .RadioButton) {
-							ui.filter_checkbox = .starts_with
-						}
-						if .CHANGE in mu.checkbox(ctx, "Contains", &contains, local_style = .RadioButton) {
-							ui.filter_checkbox = .contains
-						}
-						if .CHANGE in mu.checkbox(ctx, "Ends with", &ends_with, local_style = .RadioButton) {
-							ui.filter_checkbox = .ends_with
-						}
-
-						if .SUBMIT in mu.button(ctx, "GENERATE PASSWORD") {
-							generate_password(ui)
-						}
+					}
+					{mu.layout_column(ctx)
+						mu.layout_row(ctx, {200}, 200)
 
 						if .SUBMIT in mu.button(ctx, "ADD") {
 							new_entry := Entry {
@@ -445,6 +437,19 @@ ez_app_windows :: proc(app_state: ^AppState) {
 							slice.sort_by_cmp(vault.entries[:], cmp_entries)
 						}
 					}
+						mu.layout_row(ctx, {uiw(ui, 0.5)})
+						mu.label(ctx, "Password should include:")
+						mu.layout_row(ctx, {uiw(ui, 0.50)}, 50)
+						mu.checkbox(ctx, "Numbers (0-9)", &ui.password_gen_boxes.numbers)
+						mu.checkbox(ctx, "Specials (!@#$%^&*()-_=+)", &ui.password_gen_boxes.special)
+						mu.checkbox(ctx, "Capital letters", &ui.password_gen_boxes.uppers)
+						mu.slider(ctx, &ui.password_gen_boxes.len, 1, 255, 1)
+
+						mu.layout_row(ctx, {uiw(ui, 0.50)}, 50)
+						if .SUBMIT in mu.button(ctx, "GENERATE PASSWORD") {
+							generate_password(ui)
+						}
+
 				}
 				case .delete_entry: {
 	
