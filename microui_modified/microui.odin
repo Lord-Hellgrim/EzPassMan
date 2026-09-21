@@ -1429,9 +1429,9 @@ begin_window :: proc(ctx: ^Context, title: string, rect: Rect, opt := Options{})
 	push(&ctx.id_stack, id)
 	rect := rect
 
-	if cnt.rect.w == 0 {
+	// if cnt.rect.w == 0 {
 		cnt.rect = rect
-	}
+	// }
 	begin_root_container(ctx, cnt)
 	rect = cnt.rect
 	body := cnt.rect

@@ -76,4 +76,4 @@ to_cstring :: proc(smallstring: SmallString($N), allocator := context.allocator)
     smallstring := smallstring
     s := as_string(&smallstring)
     return strings.clone_to_cstring(s, allocator = allocator)
-} 
+}

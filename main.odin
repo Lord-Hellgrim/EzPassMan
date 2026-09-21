@@ -77,7 +77,7 @@ UiState :: struct {
     screen_texture: RenderTexture2D,
 	font: Font,
 	scroll_state: f32,
-	text_bufs: [BufId]TextBox_State,
+	text_bufs: [BufId]TextBuffer,
 	filter_checkbox: FilterState,
 	password_gen_boxes: PassGenState,
 	// scale_text_buffer : TextBox_State,
@@ -110,7 +110,8 @@ clear_text_buffers :: proc(ui: ^UiState) {
 	// zero_text_buffer(&ui.note_text_state)
 	// zero_text_buffer(&ui.filter_text_state)
 }
-TextBox_State :: struct {
+
+TextBuffer :: struct {
 	buf: [255]u8,
 	len: int,
 }
@@ -130,7 +131,7 @@ PassGenState :: struct {
 
 
 
-zero_text_buffer :: proc(text_buffer: ^TextBox_State) {
+zero_text_buffer :: proc(text_buffer: ^TextBuffer) {
 	slice.zero(text_buffer.buf[:])
 	text_buffer.len = 0
 }
@@ -250,27 +251,20 @@ ez_app_windows :: proc(app_state: ^AppState) {
 
 	vault := make_sample_vault()
 
+	
 	starting := true
 	entering_password_starting := true
-
-	panel_split: i32 = 5
 	
-	// loc: i32 = 0
 	for !WindowShouldClose() {
-		// loc += 1
+		fmt.println(uiw(ui, 0.2))
 		free_all(context.temp_allocator)
 		process_user_input(user_input, ui)
-		
-		ui.screen_width = get_screen_width()
-		ui.screen_height = get_screen_height()
-		
-		panel_width := ui.screen_width / panel_split
 
 		mu.begin(ctx)
 
 
 		{//------------------------------------- Side Panel -----------------------------------------------
-			mu.begin_window(ctx, "Side panel", mu.Rect{0,0,uiw(ui, 0.2), ui.screen_height}, opt = {.NO_CLOSE, .NO_INTERACT, .NO_TITLE}) 
+			mu.begin_window(ctx, "Side panel", mu.Rect{0,0,uiw(ui, 0.2), ui.screen_height}, opt = {.NO_CLOSE, .NO_INTERACT, .NO_TITLE, .NO_SCROLL}) 
 			defer mu.end_window(ctx)
 
 			if app_state.command == .start {
@@ -315,8 +309,17 @@ ez_app_windows :: proc(app_state: ^AppState) {
 				}
 			}
 		} // -------------------------End of side panel -----------------------------------------------------
-
-		if mu.window(ctx, "START", mu.Rect{uiw(ui, 0.2), 0 , uiw(ui, 0.8), ui.screen_height}, {.NO_CLOSE, .NO_INTERACT, .NO_TITLE}) {
+		main_banner_text : string
+		switch app_state.command {
+			case .start: main_banner_text = "START"
+			case .main_menu: main_banner_text = "MAIN MENU"
+			case .view_vault: main_banner_text = "VIEW VAULT"
+			case .add_entry: main_banner_text = "ADD ENTRY"
+			case .delete_entry: main_banner_text = "DELETE ENTRY"
+			case .edit_entry: main_banner_text = "EDIT ENTRY"
+			case .entering_password: main_banner_text = "EDIT PASSWORD"
+		}
+		if mu.window(ctx, main_banner_text, mu.Rect{uiw(ui, 0.2), 0 , uiw(ui, 0.8), ui.screen_height}, {.NO_CLOSE, .ALIGN_CENTER, .EXPANDED}) {
 			switch app_state.command {
 				case .start: {
 					mu.layout_row(
@@ -498,6 +501,8 @@ ez_app_windows :: proc(app_state: ^AppState) {
 main :: proc() {
 
 	app_state := new(AppState)
+
+	ui := new(UiState)
 
 	initialize_ui(&app_state.ui_state)
 
