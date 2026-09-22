@@ -262,10 +262,10 @@ ez_app_windows :: proc(app_state: ^AppState) {
 
 		mu.begin(ctx)
 
-
 		{//------------------------------------- Side Panel -----------------------------------------------
-			mu.begin_window(ctx, "Side panel", mu.Rect{0,0,uiw(ui, 0.2), ui.screen_height}, opt = {.NO_CLOSE, .NO_INTERACT, .NO_TITLE, .NO_SCROLL}) 
-			defer mu.end_window(ctx)
+			r := mu.Rect{0,0,uiw(ui, 0.2), ui.screen_height}
+			mu.begin_panel_window(ctx, "Side panel", r, opt = {.NO_CLOSE, .NO_INTERACT, .NO_TITLE, .NO_SCROLL}) 
+			defer mu.end_panel_window(ctx)
 
 			if app_state.command == .start {
 				
@@ -319,7 +319,8 @@ ez_app_windows :: proc(app_state: ^AppState) {
 			case .edit_entry: main_banner_text = "EDIT ENTRY"
 			case .entering_password: main_banner_text = "EDIT PASSWORD"
 		}
-		if mu.window(ctx, main_banner_text, mu.Rect{uiw(ui, 0.2), 0 , uiw(ui, 0.8), ui.screen_height}, {.NO_CLOSE, .ALIGN_CENTER, .EXPANDED}) {
+		{mu.begin_panel_window(ctx, main_banner_text, mu.Rect{uiw(ui, 0.2), 0 , uiw(ui, 0.8), ui.screen_height}, {.NO_CLOSE, .ALIGN_CENTER, .EXPANDED})
+			defer mu.end_panel_window(ctx)
 			switch app_state.command {
 				case .start: {
 					mu.layout_row(
@@ -437,7 +438,7 @@ ez_app_windows :: proc(app_state: ^AppState) {
 								note = EzString{len = u8(ui.text_bufs[.note].len), data = ui.text_bufs[.note].buf},
 							}
 							add_entry(vault, new_entry)
-							slice.sort_by_cmp(vault.entries[:], cmp_entries)
+							
 						}
 					}
 						mu.layout_row(ctx, {uiw(ui, 0.5)})

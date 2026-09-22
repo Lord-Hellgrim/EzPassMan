@@ -49,6 +49,20 @@ equal :: proc(a: SmallString($N), b: SmallString($M)) -> bool {
     return slice.equal(a[:min], b[:min])
 }
 
+cmp :: proc(a: SmallString($N), b: SmallString($M)) -> slice.Ordering {
+    a, b := a, b
+    a_s := as_string(&a)
+    b_s := as_string(&b)
+
+    switch strings.compare(a_s, b_s) {
+        case -1: return .Less
+        case  0: return .Equal
+        case  1: return .Greater
+        case: unreachable()
+    }
+
+}
+
 // returns a view of the data section of the SmallString. Does not copy
 as_string :: proc(s: ^SmallString($N)) -> string {
     result := strings.string_from_ptr(&(s.data[0]), int(s.len))

@@ -273,6 +273,9 @@ make_sample_vault :: proc() -> ^Vault {
     test_vault := make_new_vault()
 
     for i in u8(0)..<10 {
+        if i == 5 {
+            continue
+        }
         id := ss.from_string("id number: ", 255)
         ss.extend_with_bytes(&id, i+48)
         username := ss.from_string("username number: ", 255)
@@ -353,14 +356,34 @@ add_entry :: proc(vault: ^Vault, entry: Entry) -> Status {
     if vault.is_locked {
         return .Failure
     }
-    old_entry, index := read_entry(vault, entry.id)
-    if old_entry == NullEntry {
-        vault.entries[vault.number_of_entries] = entry
-        vault.number_of_entries += 1
-        return .Success
-    } else {
-        return .Failure
+
+    searching := true
+    temp : Entry
+    bubble := entry
+    for i in 0..<vault.number_of_entries + 1 {
+        if searching {
+            switch ss.cmp(entry.id, vault.entries[i].id) {
+                case .Less: continue
+                case .Equal: return .Failure
+                case .Greater: searching = false
+            }
+        }
+        temp = vault.entries[i]
+        vault.entries[i] = bubble
+        bubble = temp
     }
+
+    vault.number_of_entries += 1
+    return .Success
+
+    // old_entry, index := read_entry(vault, entry.id)
+    // if old_entry == NullEntry {
+    //     vault.entries[vault.number_of_entries] = entry
+    //     vault.number_of_entries += 1
+    //     return .Success
+    // } else {
+    //     return .Failure
+    // }
 }
 
 update_entry :: proc(vault: ^Vault, new_entry: Entry) -> Status {

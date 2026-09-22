@@ -1429,9 +1429,9 @@ begin_window :: proc(ctx: ^Context, title: string, rect: Rect, opt := Options{})
 	push(&ctx.id_stack, id)
 	rect := rect
 
-	// if cnt.rect.w == 0 {
+	if cnt.rect.w == 0 {
 		cnt.rect = rect
-	// }
+	}
 	begin_root_container(ctx, cnt)
 	rect = cnt.rect
 	body := cnt.rect
@@ -1506,6 +1506,95 @@ begin_window :: proc(ctx: ^Context, title: string, rect: Rect, opt := Options{})
 }
 
 end_window :: proc(ctx: ^Context) {
+	pop_clip_rect(ctx)
+	end_root_container(ctx)
+}
+
+begin_panel_window :: proc(ctx: ^Context, title: string, rect: Rect, opt := Options{}) -> bool {
+	assert(title != "", "missing window title")
+	id := get_id(ctx, title)
+	cnt := internal_get_container(ctx, id, opt)
+	if cnt == nil || !cnt.open {
+		return false
+	}
+	push(&ctx.id_stack, id)
+	rect := rect
+
+	cnt.rect = rect
+	begin_root_container(ctx, cnt)
+	rect = cnt.rect
+	body := cnt.rect
+
+	/* draw frame */
+	if .NO_FRAME not_in opt {
+		ctx.draw_frame(ctx, rect, .WINDOW_BG)
+	}
+
+	/* do title bar */
+	if .NO_TITLE not_in opt {
+		tr := rect
+		tr.h = ctx.style.title_height
+		ctx.draw_frame(ctx, tr, .TITLE_BG)
+
+		/* do title text */
+		if .NO_TITLE not_in opt {
+			tid := get_id(ctx, "!title")
+			update_control(ctx, tid, tr, opt)
+			draw_control_text(ctx, title, tr, .TITLE_TEXT, opt)
+			if tid == ctx.focus_id && ctx.mouse_down_bits == {.LEFT} {
+				cnt.rect.x += ctx.mouse_delta.x
+				cnt.rect.y += ctx.mouse_delta.y
+			}
+			body.y += tr.h
+			body.h -= tr.h
+		}
+
+		/* do `close` button */
+		if .NO_CLOSE not_in opt {
+			cid := get_id(ctx, "!close")
+			r := Rect{tr.x + tr.w - tr.h, tr.y, tr.h, tr.h}
+			tr.w -= r.w
+			draw_icon(ctx, .CLOSE, r, ctx.style.colors[.TITLE_TEXT])
+			update_control(ctx, cid, r, opt)
+			if .LEFT in ctx.mouse_released_bits && cid == ctx.hover_id {
+				cnt.open = false
+			}
+		}
+	}
+
+	/* do `resize` handle */
+	if .NO_RESIZE not_in opt {
+		sz := ctx.style.footer_height
+		rid := get_id(ctx, "!resize")
+		r := Rect{rect.x + rect.w - sz, rect.y + rect.h - sz, sz, sz}
+		draw_icon(ctx, .RESIZE, r, ctx.style.colors[.TEXT])
+		update_control(ctx, rid, r, opt)
+		if rid == ctx.focus_id && .LEFT in ctx.mouse_down_bits {
+			cnt.rect.w = max(96, cnt.rect.w + ctx.mouse_delta.x)
+			cnt.rect.h = max(64, cnt.rect.h + ctx.mouse_delta.y)
+		}
+		body.h -= sz
+	}
+
+	push_container_body(ctx, cnt, body, opt)
+
+	/* resize to content size */
+	if .AUTO_SIZE in opt {
+		r := get_layout(ctx).body
+		cnt.rect.w = cnt.content_size.x + (cnt.rect.w - r.w)
+		cnt.rect.h = cnt.content_size.y + (cnt.rect.h - r.h)
+	}
+
+	/* close if this is a popup window and elsewhere was clicked */
+	if .POPUP in opt && mouse_pressed(ctx) && ctx.hover_root != cnt {
+		cnt.open = false
+	}
+
+	push_clip_rect(ctx, cnt.body)
+	return true
+}
+
+end_panel_window :: proc(ctx: ^Context) {
 	pop_clip_rect(ctx)
 	end_root_container(ctx)
 }
