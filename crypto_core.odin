@@ -426,3 +426,7 @@ delete_entry :: proc(vault: ^Vault, id: EzString) -> Status {
         return .Success
     }
 }
+
+bubble_sort_vault_entries :: proc(vault: ^Vault, start_index: int = 0) {
+    bubble := vault.entries[start_index]
+}

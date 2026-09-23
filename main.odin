@@ -217,6 +217,7 @@ confirm_edit :: proc(app_state: ^AppState, vault: ^Vault) {
 		note = EzString{len = u8(ui.text_bufs[.note].len), data = ui.text_bufs[.note].buf},
 	}
 	vault.entries[ui.selected_entry] = new_entry
+	bubble_sort_vault_entries(vault)
 	clear_text_buffers(ui)
 	ui.starting_edit = true
 	app_state.command = .view_vault
