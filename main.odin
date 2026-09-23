@@ -61,12 +61,10 @@ AppState :: struct {
     ui_state: UiState,
 }
 
+MAX_WIDGETS :: 128
 
 UiState :: struct {
 	mu_ctx: mu.Context,
-    log_buf:         [1<<16]byte,
-    log_buf_len:     int,
-    log_buf_updated: bool,
     bg: mu.Color,
     atlas_texture: RenderTexture2D,
     image: Image,
@@ -77,6 +75,7 @@ UiState :: struct {
     screen_texture: RenderTexture2D,
 	font: Font,
 	scroll_state: f32,
+	tab_ids: [dynamic; MAX_WIDGETS]mu.Id,
 	text_bufs: [BufId]TextBuffer,
 	filter_checkbox: FilterState,
 	password_gen_boxes: PassGenState,
@@ -262,6 +261,8 @@ ez_app_windows :: proc(app_state: ^AppState) {
 
 		mu.begin(ctx)
 
+		clear(&ui.tab_ids)
+
 		{//------------------------------------- Side Panel -----------------------------------------------
 			r := mu.Rect{0,0,uiw(ui, 0.2), ui.screen_height}
 			mu.begin_panel_window(ctx, "Side panel", r, opt = {.NO_CLOSE, .NO_INTERACT, .NO_TITLE, .NO_SCROLL}) 
@@ -293,6 +294,7 @@ ez_app_windows :: proc(app_state: ^AppState) {
 				}
 				mu.label(ctx, "Filter by")
 				mu.textbox(ctx, ui.text_bufs[.filter].buf[:], &ui.text_bufs[.filter].len)
+				append(&ui.tab_ids, ctx.last_id)
 				mu.layout_row(ctx, {uiw(ui, 0.19)}, 50)
 				starts_with := ui.filter_checkbox == FilterState.starts_with
 				contains := ui.filter_checkbox == FilterState.contains
@@ -332,6 +334,7 @@ ez_app_windows :: proc(app_state: ^AppState) {
 					)
 					mu.label(ctx, "Enter User id")
 					res := mu.textbox(ctx, ui.text_bufs[.username].buf[:], &ui.text_bufs[.username].len, {.ALIGN_CENTER})
+					append(&ui.tab_ids, ctx.last_id)
 					if starting {
 						mu.set_focus(ctx, ctx.last_id)
 						starting = false
@@ -352,6 +355,7 @@ ez_app_windows :: proc(app_state: ^AppState) {
 						)
 						mu.label(ctx, "VAULT IS LOCKED. ENTER PASSWORD")
 						password_box_result := mu.textbox(ctx, ui.text_bufs[.password].buf[:], &ui.text_bufs[.password].len, opt = {.ALIGN_CENTER}, local_style = .PasswordText)
+						append(&ui.tab_ids, ctx.last_id)
 						if entering_password_starting {
 							mu.set_focus(ctx, ctx.last_id)
 							entering_password_starting = false
@@ -422,9 +426,13 @@ ez_app_windows :: proc(app_state: ^AppState) {
 						mu.layout_row(ctx, {300}, 40)
 
 						mu.textbox(ctx, ui.text_bufs[.entry_id].buf[:], &ui.text_bufs[.entry_id].len)
+						append(&ui.tab_ids, ctx.last_id)
 						mu.textbox(ctx, ui.text_bufs[.username].buf[:], &ui.text_bufs[.username].len)
+						append(&ui.tab_ids, ctx.last_id)
 						mu.textbox(ctx, ui.text_bufs[.password].buf[:], &ui.text_bufs[.password].len)
+						append(&ui.tab_ids, ctx.last_id)
 						mu.textbox(ctx, ui.text_bufs[.note].buf[:], &ui.text_bufs[.note].len)
+						append(&ui.tab_ids, ctx.last_id)
 
 					}
 					{mu.layout_column(ctx)

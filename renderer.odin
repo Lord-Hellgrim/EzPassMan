@@ -4,6 +4,7 @@ import "core:strings"
 import "core:c"
 import "core:unicode/utf8"
 import "core:fmt"
+import "core:slice"
 
 import rl "vendor:raylib"
 import mu "microui_modified"
@@ -45,7 +46,8 @@ process_user_input :: proc(user_input: ^UserInput, state: ^UiState) {
 		rl.UnloadRenderTexture(state.screen_texture)
 		state.screen_texture = rl.LoadRenderTexture(state.screen_width, state.screen_height)
 	}
-	
+
+
     mouse := rl.GetMousePosition()
     user_input.mouse_x = i32(mouse.x)
     user_input.mouse_y = i32(mouse.y)
@@ -68,12 +70,26 @@ process_user_input :: proc(user_input: ^UserInput, state: ^UiState) {
 	for keys_rl, key_mu in state.key_map {
 		for key_rl in keys_rl {
 			switch {
-			case key_rl == .KEY_NULL:
-				// ignore
-			case rl.IsKeyPressed(key_rl), rl.IsKeyPressedRepeat(key_rl):
-				mu.input_key_down(ctx, key_mu)
-			case rl.IsKeyReleased(key_rl):
-				mu.input_key_up  (ctx, key_mu)
+				case key_rl == .KEY_NULL:
+					// ignore
+				case rl.IsKeyPressed(key_rl), rl.IsKeyPressedRepeat(key_rl):
+					mu.input_key_down(ctx, key_mu)
+				case rl.IsKeyReleased(key_rl):
+					mu.input_key_up  (ctx, key_mu)
+				case rl.IsKeyPressed(.TAB): {
+					current_focus : mu.Id
+					br := false
+					for i in 0..<len(state.tab_ids) {
+						if state.tab_ids[i] == ctx.focus_id {
+							mu.set_focus(ctx, state.tab_ids[(i+1)%len(state.tab_ids)])
+							br = true
+							break
+						}
+					}
+					if !br && len(state.tab_ids) != 0 {
+						mu.set_focus(ctx, state.tab_ids[0])
+					}
+				}
 			}
 		}
 	}
