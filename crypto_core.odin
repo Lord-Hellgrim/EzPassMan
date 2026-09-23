@@ -357,15 +357,29 @@ add_entry :: proc(vault: ^Vault, entry: Entry) -> Status {
         return .Failure
     }
 
+    if vault.number_of_entries == 0 {
+        vault.entries[0] = entry
+        vault.number_of_entries += 1
+        return .Success
+    } else if vault.number_of_entries == 1000 {
+        return .Failure
+    }
+
     searching := true
     temp : Entry
     bubble := entry
     for i in 0..<vault.number_of_entries + 1 {
+        
         if searching {
+            if i == vault.number_of_entries {
+                vault.entries[i] = entry
+                vault.number_of_entries += 1
+                return .Success
+            }
             switch ss.cmp(entry.id, vault.entries[i].id) {
-                case .Less: continue
+                case .Less: searching = false
                 case .Equal: return .Failure
-                case .Greater: searching = false
+                case .Greater: continue
             }
         }
         temp = vault.entries[i]
