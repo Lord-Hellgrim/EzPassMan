@@ -13,15 +13,15 @@ SmallString :: struct($N: u8) {
 
 
 // Adds the first len bytes of src.data to dst.data. Bytes beyond the cap of dst are not copied.
-extend_in_place :: proc(dst: ^SmallString($N), src: SmallString($M)) {
+extend_in_place :: proc(dst: ^SmallString($N), src: ^SmallString($M)) {
 
     num_chars := src.len
     if num_chars > N - dst.len {
-        status := .not_enough_space_for_all_chars
         num_chars = N-dst.len
     }
 
-    copy(dst[dst.len:], src[:num_chars])
+    copy(dst.data[dst.len:], src.data[:num_chars])
+    dst.len += num_chars
 }
 
 extend_with_bytes :: proc(dst: ^SmallString($N), src: u8) {

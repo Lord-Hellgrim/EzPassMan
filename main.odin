@@ -77,6 +77,8 @@ UiState :: struct {
 	text_bufs: [BufId]TextBuffer,
 	filter_checkbox: FilterState,
 	password_gen_boxes: PassGenState,
+	selected_entry: int,
+	starting_edit: bool,
 	// scale_text_buffer : TextBox_State,
 	// password_text_buffer: TextBox_State,
 	// entry_id_text_state: TextBox_State,
@@ -160,6 +162,7 @@ initialize_ui :: proc(state: ^UiState) {
 
 	state.password_gen_boxes.len = 20
 	state.current_tab_focus = -1
+	state.starting_edit = true
 }
 
 uiw :: proc(state: ^UiState, x: f32) -> i32 {
@@ -203,6 +206,20 @@ get_and_add_entry :: proc(app_state: ^AppState, vault: ^Vault) {
 	clear_text_buffers(ui)
 	app_state.command = .view_vault
 	add_entry(vault, new_entry)
+}
+
+confirm_edit :: proc(app_state: ^AppState, vault: ^Vault) {
+	ui := &app_state.ui_state
+	new_entry := Entry {
+		id = EzString{len = u8(ui.text_bufs[.entry_id].len), data = ui.text_bufs[.entry_id].buf},
+		username = EzString{len = u8(ui.text_bufs[.username].len), data = ui.text_bufs[.username].buf},
+		password = EzString{len = u8(ui.text_bufs[.password].len), data = ui.text_bufs[.password].buf},
+		note = EzString{len = u8(ui.text_bufs[.note].len), data = ui.text_bufs[.note].buf},
+	}
+	vault.entries[ui.selected_entry] = new_entry
+	clear_text_buffers(ui)
+	ui.starting_edit = true
+	app_state.command = .view_vault
 }
 
 generate_password :: proc(ui: ^UiState) {
@@ -400,6 +417,7 @@ ez_app_windows :: proc(app_state: ^AppState) {
 								measure_text_height(ctx.style.font)*2
 								)
 							if .SUBMIT in mu.button(ctx, ss.as_string(&vault.entries[i].id)) {
+								ui.selected_entry = int(i)
 								app_state.command = .edit_entry;
 							}
 							{mu.layout_column(ctx)
@@ -481,6 +499,27 @@ ez_app_windows :: proc(app_state: ^AppState) {
 	
 				}
 				case .edit_entry: {
+					if ui.starting_edit {
+						selected_entry := vault.entries[ui.selected_entry]
+						ui.text_bufs[.entry_id].buf = selected_entry.id.data
+						ui.text_bufs[.entry_id].len = int(selected_entry.id.len)
+	
+						ui.text_bufs[.username].buf = selected_entry.username.data
+						ui.text_bufs[.username].len = int(selected_entry.username.len)
+	
+						ui.text_bufs[.password].buf = selected_entry.password.data
+						ui.text_bufs[.password].len = int(selected_entry.password.len)
+	
+						ui.text_bufs[.note].buf = selected_entry.note.data
+						ui.text_bufs[.note].len = int(selected_entry.note.len)
+						ui.starting_edit = false
+					}
+					mu.layout_row(ctx, {500}, 50)
+					label_string : EzString
+					ss.extend_with_string(&label_string, "EDITING ENTRY: ")
+					ss.extend_in_place(&label_string, &vault.entries[ui.selected_entry].id)
+					mu.label(ctx, ss.as_string(&label_string))
+
 					mu.layout_row(ctx, {300, 100, 100}, 100)
 					{mu.layout_column(ctx)
 						mu.layout_row(ctx, {300}, 40)
@@ -489,19 +528,20 @@ ez_app_windows :: proc(app_state: ^AppState) {
 						mu.label(ctx, "Password")
 						mu.label(ctx, "Note")
 					}
+
 					{mu.layout_column(ctx)
 						mu.layout_row(ctx, {300}, 40)
 						if .SUBMIT in mu.textbox(ctx, ui.text_bufs[.entry_id].buf[:], &ui.text_bufs[.entry_id].len) {
-							
+							confirm_edit(app_state, vault)
 						}
 						if .SUBMIT in mu.textbox(ctx, ui.text_bufs[.username].buf[:], &ui.text_bufs[.username].len) {
-							
+							confirm_edit(app_state, vault)
 						}
 						if .SUBMIT in mu.textbox(ctx, ui.text_bufs[.password].buf[:], &ui.text_bufs[.password].len) {
-							
+							confirm_edit(app_state, vault)
 						}
 						if .SUBMIT in mu.textbox(ctx, ui.text_bufs[.note].buf[:], &ui.text_bufs[.note].len) {
-							
+							confirm_edit(app_state, vault)
 						}
 					}
 				}
