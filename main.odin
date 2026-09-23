@@ -10,8 +10,6 @@ import "core:time"
 import "core:slice"
 import "base:intrinsics"
 
-import "core:nbio"
-
 import mu "microui_modified"
 import ss "smallstrings"
 
@@ -29,7 +27,6 @@ ColumnTable :: struct($N: int, $K: typeid, $V: typeid) where intrinsics.type_is_
 	[N]K,
 	[N]V,
 }
-
 
 SubCommand :: enum {
     id,
@@ -76,6 +73,7 @@ UiState :: struct {
 	font: Font,
 	scroll_state: f32,
 	tab_ids: [dynamic; MAX_WIDGETS]mu.Id,
+	current_tab_focus: int,
 	text_bufs: [BufId]TextBuffer,
 	filter_checkbox: FilterState,
 	password_gen_boxes: PassGenState,
@@ -128,13 +126,10 @@ PassGenState :: struct {
 	len: f32
 }
 
-
-
 zero_text_buffer :: proc(text_buffer: ^TextBuffer) {
 	slice.zero(text_buffer.buf[:])
 	text_buffer.len = 0
 }
-
 
 initialize_ui :: proc(state: ^UiState) {
 	state.key_map = [mu.Key][2]KeyboardKey{
@@ -164,6 +159,7 @@ initialize_ui :: proc(state: ^UiState) {
 	state.screen_width = 1024
 
 	state.password_gen_boxes.len = 20
+	state.current_tab_focus = -1
 }
 
 uiw :: proc(state: ^UiState, x: f32) -> i32 {
@@ -194,6 +190,19 @@ set_ui_scale :: proc(state: ^UiState) {
 load_latest_vault_task :: proc(task: thread.Task) {
 	data := cast(^BackgroundData)task.data
 	get_latest_vault(data.vault_ptr, data.user_id)
+}
+
+get_and_add_entry :: proc(app_state: ^AppState, vault: ^Vault) {
+	ui := &app_state.ui_state
+	new_entry := Entry {
+		id = EzString{len = u8(ui.text_bufs[.entry_id].len), data = ui.text_bufs[.entry_id].buf},
+		username = EzString{len = u8(ui.text_bufs[.username].len), data = ui.text_bufs[.username].buf},
+		password = EzString{len = u8(ui.text_bufs[.password].len), data = ui.text_bufs[.password].buf},
+		note = EzString{len = u8(ui.text_bufs[.note].len), data = ui.text_bufs[.note].buf},
+	}
+	clear_text_buffers(ui)
+	app_state.command = .view_vault
+	add_entry(vault, new_entry)
 }
 
 generate_password :: proc(ui: ^UiState) {
@@ -250,12 +259,10 @@ ez_app_windows :: proc(app_state: ^AppState) {
 
 	vault := make_sample_vault()
 
-	
 	starting := true
 	entering_password_starting := true
 	
 	for !WindowShouldClose() {
-		fmt.println(uiw(ui, 0.2))
 		free_all(context.temp_allocator)
 		process_user_input(user_input, ui)
 
@@ -294,7 +301,6 @@ ez_app_windows :: proc(app_state: ^AppState) {
 				}
 				mu.label(ctx, "Filter by")
 				mu.textbox(ctx, ui.text_bufs[.filter].buf[:], &ui.text_bufs[.filter].len)
-				append(&ui.tab_ids, ctx.last_id)
 				mu.layout_row(ctx, {uiw(ui, 0.19)}, 50)
 				starts_with := ui.filter_checkbox == FilterState.starts_with
 				contains := ui.filter_checkbox == FilterState.contains
@@ -334,7 +340,6 @@ ez_app_windows :: proc(app_state: ^AppState) {
 					)
 					mu.label(ctx, "Enter User id")
 					res := mu.textbox(ctx, ui.text_bufs[.username].buf[:], &ui.text_bufs[.username].len, {.ALIGN_CENTER})
-					append(&ui.tab_ids, ctx.last_id)
 					if starting {
 						mu.set_focus(ctx, ctx.last_id)
 						starting = false
@@ -355,7 +360,6 @@ ez_app_windows :: proc(app_state: ^AppState) {
 						)
 						mu.label(ctx, "VAULT IS LOCKED. ENTER PASSWORD")
 						password_box_result := mu.textbox(ctx, ui.text_bufs[.password].buf[:], &ui.text_bufs[.password].len, opt = {.ALIGN_CENTER}, local_style = .PasswordText)
-						append(&ui.tab_ids, ctx.last_id)
 						if entering_password_starting {
 							mu.set_focus(ctx, ctx.last_id)
 							entering_password_starting = false
@@ -425,20 +429,30 @@ ez_app_windows :: proc(app_state: ^AppState) {
 					{mu.layout_column(ctx)
 						mu.layout_row(ctx, {300}, 40)
 
-						mu.textbox(ctx, ui.text_bufs[.entry_id].buf[:], &ui.text_bufs[.entry_id].len)
+						if .SUBMIT in mu.textbox(ctx, ui.text_bufs[.entry_id].buf[:], &ui.text_bufs[.entry_id].len) {
+							get_and_add_entry(app_state, vault)
+						}
 						append(&ui.tab_ids, ctx.last_id)
-						mu.textbox(ctx, ui.text_bufs[.username].buf[:], &ui.text_bufs[.username].len)
+						if .SUBMIT in mu.textbox(ctx, ui.text_bufs[.username].buf[:], &ui.text_bufs[.username].len) {
+							get_and_add_entry(app_state, vault)
+						}
 						append(&ui.tab_ids, ctx.last_id)
-						mu.textbox(ctx, ui.text_bufs[.password].buf[:], &ui.text_bufs[.password].len)
+						if .SUBMIT in mu.textbox(ctx, ui.text_bufs[.password].buf[:], &ui.text_bufs[.password].len) {
+							get_and_add_entry(app_state, vault)
+						}
 						append(&ui.tab_ids, ctx.last_id)
-						mu.textbox(ctx, ui.text_bufs[.note].buf[:], &ui.text_bufs[.note].len)
+						if .SUBMIT in mu.textbox(ctx, ui.text_bufs[.note].buf[:], &ui.text_bufs[.note].len) {
+							get_and_add_entry(app_state, vault)
+						}
 						append(&ui.tab_ids, ctx.last_id)
+						fmt.println(ui.tab_ids)
 
 					}
 					{mu.layout_column(ctx)
 						mu.layout_row(ctx, {200}, 200)
 
 						if .SUBMIT in mu.button(ctx, "ADD") {
+							append(&ui.tab_ids, ctx.last_id)
 							new_entry := Entry {
 								id = EzString{len = u8(ui.text_bufs[.entry_id].len), data = ui.text_bufs[.entry_id].buf},
 								username = EzString{len = u8(ui.text_bufs[.username].len), data = ui.text_bufs[.username].buf},
@@ -520,14 +534,12 @@ main :: proc() {
     defer destroy_renderer(&app_state.ui_state)
 	defer clear_clipboard("Clipboard was cleared by EzPassMan. You're welcome ;)")
     ez_app_windows(app_state)
-
 }
-
 
 // -------------------Networking code -----------------------------------------------------
 
 get_latest_vault :: proc(current_vault: ^Vault, user_id: ss.SmallString(255)) {
-    // make noise connection to server and fetch vault
+    // make connection to server and fetch vault
    
 }
 

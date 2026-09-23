@@ -4,7 +4,6 @@ import "core:strings"
 import "core:c"
 import "core:unicode/utf8"
 import "core:fmt"
-import "core:slice"
 
 import rl "vendor:raylib"
 import mu "microui_modified"
@@ -47,13 +46,11 @@ process_user_input :: proc(user_input: ^UserInput, state: ^UiState) {
 		state.screen_texture = rl.LoadRenderTexture(state.screen_width, state.screen_height)
 	}
 
-
     mouse := rl.GetMousePosition()
     user_input.mouse_x = i32(mouse.x)
     user_input.mouse_y = i32(mouse.y)
 	mu.input_mouse_move(ctx, user_input.mouse_x, user_input.mouse_y)
 	
-
 	mouse_wheel_pos := rl.GetMouseWheelMoveV()
 	mu.input_scroll(ctx, i32(mouse_wheel_pos.x) * 30, i32(mouse_wheel_pos.y) * -30)
 	user_input.mouse_down = rl.IsMouseButtonDown(rl.MouseButton.LEFT)
@@ -76,22 +73,24 @@ process_user_input :: proc(user_input: ^UserInput, state: ^UiState) {
 					mu.input_key_down(ctx, key_mu)
 				case rl.IsKeyReleased(key_rl):
 					mu.input_key_up  (ctx, key_mu)
-				case rl.IsKeyPressed(.TAB): {
-					current_focus : mu.Id
-					br := false
-					for i in 0..<len(state.tab_ids) {
-						if state.tab_ids[i] == ctx.focus_id {
-							mu.set_focus(ctx, state.tab_ids[(i+1)%len(state.tab_ids)])
-							br = true
-							break
-						}
-					}
-					if !br && len(state.tab_ids) != 0 {
-						mu.set_focus(ctx, state.tab_ids[0])
-					}
-				}
 			}
 		}
+	}
+
+	if rl.IsKeyReleased(.TAB) {
+		fmt.println("HERE")
+		if rl.IsKeyDown(.LEFT_SHIFT) || rl.IsKeyDown(.RIGHT_SHIFT) {
+			if state.current_tab_focus == -1 {
+				state.current_tab_focus = 0
+			} else if state.current_tab_focus == 0 {
+				state.current_tab_focus = len(state.tab_ids)-1
+			} else {
+				state.current_tab_focus -= 1
+			}
+		} else {
+			state.current_tab_focus = (state.current_tab_focus + 1) % len(state.tab_ids)
+		}
+		mu.set_focus(ctx, state.tab_ids[state.current_tab_focus])
 	}
 
 	{
