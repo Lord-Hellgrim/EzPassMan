@@ -79,6 +79,7 @@ UiState :: struct {
 	password_gen_boxes: PassGenState,
 	selected_entry: int,
 	starting_edit: bool,
+	confirming_edit: bool,
 	// scale_text_buffer : TextBox_State,
 	// password_text_buffer: TextBox_State,
 	// entry_id_text_state: TextBox_State,
@@ -165,6 +166,18 @@ initialize_ui :: proc(state: ^UiState) {
 	state.starting_edit = true
 }
 
+reset_state :: proc(app_state: ^AppState) {
+	ui := &app_state.ui_state
+	ctx := &app_state.ui_state.mu_ctx
+	clear_text_buffers(ui)
+	ui.confirming_edit = false
+	ui.current_tab_focus = 0
+	ui.scroll_state = 0
+	ui.selected_entry = -1
+	ui.starting_edit = true
+	clear(&ui.tab_ids)
+}
+
 uiw :: proc(state: ^UiState, x: f32) -> i32 {
 	return i32(x*f32(state.screen_width))
 }
@@ -210,6 +223,16 @@ get_and_add_entry :: proc(app_state: ^AppState, vault: ^Vault) {
 
 confirm_edit :: proc(app_state: ^AppState, vault: ^Vault) {
 	ui := &app_state.ui_state
+	ctx := &ui.mu_ctx
+	confirm := false
+	{mu.window(ctx, "Confirm Edit", mu.Rect{ui.screen_width/2-150, ui.screen_height/2 - 150,300, 300})
+		if .SUBMIT in mu.button(ctx, "YES") {
+			confirm = true
+		}
+		if .SUBMIT in mu.button(ctx, "NO") {
+			confirm = false
+		}
+	}
 	new_entry := Entry {
 		id = EzString{len = u8(ui.text_bufs[.entry_id].len), data = ui.text_bufs[.entry_id].buf},
 		username = EzString{len = u8(ui.text_bufs[.username].len), data = ui.text_bufs[.username].buf},
@@ -218,7 +241,7 @@ confirm_edit :: proc(app_state: ^AppState, vault: ^Vault) {
 	}
 	vault.entries[ui.selected_entry] = new_entry
 	bubble_sort_vault_entries(vault)
-	clear_text_buffers(ui)
+	reset_state(app_state)
 	ui.starting_edit = true
 	app_state.command = .view_vault
 }
@@ -500,6 +523,9 @@ ez_app_windows :: proc(app_state: ^AppState) {
 	
 				}
 				case .edit_entry: {
+
+					
+
 					if ui.starting_edit {
 						selected_entry := vault.entries[ui.selected_entry]
 						ui.text_bufs[.entry_id].buf = selected_entry.id.data
@@ -515,34 +541,48 @@ ez_app_windows :: proc(app_state: ^AppState) {
 						ui.text_bufs[.note].len = int(selected_entry.note.len)
 						ui.starting_edit = false
 					}
-					mu.layout_row(ctx, {500}, 50)
-					label_string : EzString
-					ss.extend_with_string(&label_string, "EDITING ENTRY: ")
-					ss.extend_in_place(&label_string, &vault.entries[ui.selected_entry].id)
-					mu.label(ctx, ss.as_string(&label_string))
 
-					mu.layout_row(ctx, {300, 100, 100}, 100)
-					{mu.layout_column(ctx)
-						mu.layout_row(ctx, {300}, 40)
-						mu.label(ctx, "Entry ID")
-						mu.label(ctx, "Username")
-						mu.label(ctx, "Password")
-						mu.label(ctx, "Note")
-					}
-
-					{mu.layout_column(ctx)
-						mu.layout_row(ctx, {300}, 40)
-						if .SUBMIT in mu.textbox(ctx, ui.text_bufs[.entry_id].buf[:], &ui.text_bufs[.entry_id].len) {
+					if ui.confirming_edit {
+						mu.layout_row(ctx, {300}, 50)
+						mu.label(ctx, "Confirm edit?")
+						mu.layout_row(ctx, {300, 300}, 50)
+						if .SUBMIT in mu.button(ctx, "YES") {
 							confirm_edit(app_state, vault)
 						}
-						if .SUBMIT in mu.textbox(ctx, ui.text_bufs[.username].buf[:], &ui.text_bufs[.username].len) {
-							confirm_edit(app_state, vault)
+						if .SUBMIT in mu.button(ctx, "NO") {
+							reset_state(app_state)
+							app_state.command = .view_vault
 						}
-						if .SUBMIT in mu.textbox(ctx, ui.text_bufs[.password].buf[:], &ui.text_bufs[.password].len) {
-							confirm_edit(app_state, vault)
+					} else {
+						mu.layout_row(ctx, {500}, 50)
+						label_string : EzString
+						ss.extend_with_string(&label_string, "EDITING ENTRY: ")
+						ss.extend_in_place(&label_string, &vault.entries[ui.selected_entry].id)
+						mu.label(ctx, ss.as_string(&label_string))
+	
+						mu.layout_row(ctx, {300, 100, 100}, 100)
+						{mu.layout_column(ctx)
+							mu.layout_row(ctx, {300}, 40)
+							mu.label(ctx, "Entry ID")
+							mu.label(ctx, "Username")
+							mu.label(ctx, "Password")
+							mu.label(ctx, "Note")
 						}
-						if .SUBMIT in mu.textbox(ctx, ui.text_bufs[.note].buf[:], &ui.text_bufs[.note].len) {
-							confirm_edit(app_state, vault)
+	
+						{mu.layout_column(ctx)
+							mu.layout_row(ctx, {300}, 40)
+							if .SUBMIT in mu.textbox(ctx, ui.text_bufs[.entry_id].buf[:], &ui.text_bufs[.entry_id].len) {
+								ui.confirming_edit = true
+							}
+							if .SUBMIT in mu.textbox(ctx, ui.text_bufs[.username].buf[:], &ui.text_bufs[.username].len) {
+								ui.confirming_edit = true
+							}
+							if .SUBMIT in mu.textbox(ctx, ui.text_bufs[.password].buf[:], &ui.text_bufs[.password].len) {
+								ui.confirming_edit = true
+							}
+							if .SUBMIT in mu.textbox(ctx, ui.text_bufs[.note].buf[:], &ui.text_bufs[.note].len) {
+								ui.confirming_edit = true
+							}
 						}
 					}
 				}

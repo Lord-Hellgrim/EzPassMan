@@ -427,6 +427,14 @@ delete_entry :: proc(vault: ^Vault, id: EzString) -> Status {
     }
 }
 
-bubble_sort_vault_entries :: proc(vault: ^Vault, start_index: int = 0) {
-    bubble := vault.entries[start_index]
+bubble_sort_vault_entries :: proc(vault: ^Vault) {
+    for i in 0..<vault.number_of_entries-1 {
+        switch cmp_entries(vault.entries[i], vault.entries[i+1]) {
+            case .Less: continue
+            case .Equal: assert(false, "hit an equal entry in edit path")
+            case .Greater:  {
+                vault.entries[i], vault.entries[i+1] = vault.entries[i+1], vault.entries[i]
+            }
+        }
+    }
 }
