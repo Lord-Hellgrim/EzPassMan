@@ -272,28 +272,53 @@ make_new_vault :: proc() -> ^Vault {
 make_sample_vault :: proc() -> ^Vault {
     test_vault := make_new_vault()
 
-    for i in u8(0)..<10 {
-        if i == 5 {
-            continue
-        }
-        id := ss.from_string("id number: ", 255)
-        ss.extend_with_bytes(&id, i+48)
-        username := ss.from_string("username number: ", 255)
-        ss.extend_with_bytes(&username, i+48)
-        password := ss.from_string("password number: ", 255)
-        ss.extend_with_bytes(&password, i+48)
-        note := ss.from_string("note number: ", 255)
-        ss.extend_with_bytes(&note, i+48)
-        add_entry(
-            test_vault,
-            Entry{
-                id = id, 
-                username = username,
-                password = password,
-                note = note,
-            }
-        )
-    }
+    id := ss.from_string("Google: ", 255)
+    username := ss.from_string("googlygoo: ", 255)
+    password := ss.from_string("Totally secure baby ", 255)
+    note := ss.from_string("This is a google account, herp derp", 255)
+    add_entry( test_vault, Entry{ id = id, username = username, password = password, note = note } )
+
+    id = ss.from_string("Amazon", 255)
+    username = ss.from_string("Bezos!!!", 255)
+    password = ss.from_string("Mackenzie XOXO", 255)
+    note = ss.from_string("Fuck Elon, I wanna be a trillionaire!", 255)
+    add_entry( test_vault, Entry{ id = id, username = username, password = password, note = note } )
+
+    id = ss.from_string("Netflix", 255)
+    username = ss.from_string("legit@not_fake.com", 255)
+    password = ss.from_string("12345", 255)
+    note = ss.from_string("Gotta watch Vikings, I guess", 255)
+    add_entry( test_vault, Entry{ id = id, username = username, password = password, note = note } )
+
+    id = ss.from_string("Twitter", 255)
+    username = ss.from_string("MuskyMusk", 255)
+    password = ss.from_string("TO THE MOON!", 255)
+    note = ss.from_string("Maybe I can make an electric spaceship! Hmmmmm", 255)
+    add_entry( test_vault, Entry{ id = id, username = username, password = password, note = note } )
+
+    id = ss.from_string("X", 255)
+    username = ss.from_string("unknown", 255)
+    password = ss.from_string("Not very secure", 255)
+    note = ss.from_string("Isn't this already on the list somewhere?", 255)
+    add_entry( test_vault, Entry{ id = id, username = username, password = password, note = note } )
+
+    id = ss.from_string("McMaster-Carr", 255)
+    username = ss.from_string("Carmack69420", 255)
+    password = ss.from_string("BestOfTheBest", 255)
+    note = ss.from_string("I don't have any children...", 255)
+    add_entry( test_vault, Entry{ id = id, username = username, password = password, note = note } )
+
+    id = ss.from_string("jai", 255)
+    username = ss.from_string("J_Blow", 255)
+    password = ss.from_string("Witness Me!", 255)
+    note = ss.from_string("Grump grump grump", 255)
+    add_entry( test_vault, Entry{ id = id, username = username, password = password, note = note } )
+
+    id = ss.from_string("Molly Rocket", 255)
+    username = ss.from_string("Casey MuMu", 255)
+    password = ss.from_string("Vector Vector Vector", 255)
+    note = ss.from_string("Enhance all the computers", 255)
+    add_entry( test_vault, Entry{ id = id, username = username, password = password, note = note } )
 
     lock_vault(test_vault, "1234")
 

@@ -76,6 +76,7 @@ UiState :: struct {
 	current_tab_focus: int,
 	text_bufs: [BufId]TextBuffer,
 	filter_checkbox: FilterState,
+	case_sensitive_search: bool,
 	password_gen_boxes: PassGenState,
 	selected_entry: int,
 	starting_edit: bool,
@@ -216,7 +217,7 @@ get_and_add_entry :: proc(app_state: ^AppState, vault: ^Vault) {
 		password = EzString{len = u8(ui.text_bufs[.password].len), data = ui.text_bufs[.password].buf},
 		note = EzString{len = u8(ui.text_bufs[.note].len), data = ui.text_bufs[.note].buf},
 	}
-	clear_text_buffers(ui)
+	reset_state(app_state)
 	app_state.command = .view_vault
 	add_entry(vault, new_entry)
 }
@@ -331,12 +332,14 @@ ez_app_windows :: proc(app_state: ^AppState) {
 					}
 				} else {
 					if .SUBMIT in mu.button(ctx, "View Vault",.NONE, {}) {
+						reset_state(app_state)
 						app_state.command = .view_vault
 						ui.scroll_state = 0
 					}
 				}
 				if !vault.is_locked {
 					if .SUBMIT in mu.button(ctx, "Lock Vault", .NONE, {}) {
+						reset_state(app_state)
 						lock_vault(vault, app_state.password)
 					}
 				}
@@ -356,6 +359,7 @@ ez_app_windows :: proc(app_state: ^AppState) {
 				if .CHANGE in mu.checkbox(ctx, "Ends with", &ends_with, local_style = .RadioButton) {
 					ui.filter_checkbox = .ends_with
 				}
+				mu.checkbox(ctx, "Case sensitive", &ui.case_sensitive_search)
 			}
 		} // -------------------------End of side panel -----------------------------------------------------
 		main_banner_text : string
@@ -409,12 +413,18 @@ ez_app_windows :: proc(app_state: ^AppState) {
 							password := strings.clone_from_bytes(ui.text_bufs[.password].buf[:ui.text_bufs[.password].len])
 							open_vault(vault, password)
 							app_state.password = password
-							clear_text_buffers(ui)
+							reset_state(app_state)
 						}
 					} else {
 						for i in 0..<vault.number_of_entries {
 							entry_id: string = strings.clone_from_bytes(vault.entries[i].id.data[:vault.entries[i].id.len], allocator = context.temp_allocator)
 							filter := strings.clone_from_bytes(ui.text_bufs[.filter].buf[:ui.text_bufs[.filter].len], allocator = context.temp_allocator)
+							fmt.println(ui.case_sensitive_search)
+							if !ui.case_sensitive_search {
+								filter = strings.to_lower(filter, allocator = context.temp_allocator)
+								entry_id = strings.to_lower(entry_id, allocator = context.temp_allocator)
+								fmt.println(filter)
+							}
 							switch ui.filter_checkbox {
 								case .contains: {
 									if !strings.contains(entry_id, filter) {
@@ -523,8 +533,6 @@ ez_app_windows :: proc(app_state: ^AppState) {
 	
 				}
 				case .edit_entry: {
-
-					
 
 					if ui.starting_edit {
 						selected_entry := vault.entries[ui.selected_entry]
