@@ -109,7 +109,7 @@ process_user_input :: proc(user_input: ^UserInput, state: ^UiState) {
 }
 
 measure_text_width :: proc(font: mu.Font, text: string) -> i32 {
-	actual_font := transmute(^Font)font
+	actual_font := cast(^Font)font
 	text := strings.clone_to_cstring(text, context.temp_allocator)
 	size := rl.MeasureTextEx(actual_font.base, text, f32(actual_font.base.baseSize)*actual_font.font_scale, actual_font.font_scale)
 	
@@ -117,7 +117,7 @@ measure_text_width :: proc(font: mu.Font, text: string) -> i32 {
 }
 
 measure_text_height :: proc(font: mu.Font) -> i32 {
-	actual_font := transmute(^Font)font
+	actual_font := cast(^Font)font
 	text: cstring = "EzPassMan"
 	size := rl.MeasureTextEx(actual_font.base, text, f32(actual_font.base.baseSize)*actual_font.font_scale, actual_font.font_scale)
 
@@ -163,7 +163,7 @@ initialize_renderer :: proc(state: ^UiState) {
 
 	state.font = Font{base = starting_font, font_scale = 1}
 	
-	ctx.style.font = transmute(mu.Font)(&state.font)
+	ctx.style.font = cast(mu.Font)(&state.font)
 
 	state.atlas_texture = rl.LoadRenderTexture(c.int(mu.DEFAULT_ATLAS_WIDTH), c.int(mu.DEFAULT_ATLAS_HEIGHT))
     
@@ -223,7 +223,7 @@ render :: proc (state: ^UiState) {
 			} else {
 				text = strings.clone_to_cstring(cmd.str, context.temp_allocator)
 			}
-			actual_font := transmute(^Font)ctx.style.font
+			actual_font := cast(^Font)ctx.style.font
 			rl.DrawTextEx(actual_font.base,
 				text,
 				rl.Vector2(cmd.pos),

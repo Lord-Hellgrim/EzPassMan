@@ -1,3 +1,4 @@
+#+vet explicit-allocators
 package EzPassMan
 
 import "core:c"
@@ -54,7 +55,7 @@ AppState :: struct {
     help: bool,
     vault_fetched: time.Time,
     vault_synced: bool,
-    password: string,
+    password: EzString,
     ui_state: UiState,
 }
 
@@ -169,7 +170,6 @@ initialize_ui :: proc(state: ^UiState) {
 
 reset_state :: proc(app_state: ^AppState) {
 	ui := &app_state.ui_state
-	ctx := &app_state.ui_state.mu_ctx
 	clear_text_buffers(ui)
 	ui.confirming_edit = false
 	ui.current_tab_focus = 0
@@ -273,7 +273,6 @@ generate_password :: proc(ui: ^UiState) {
 		ss.extend_with_string(&alphabet, special)
 	}
 	
-	fmt.println(temp)
 	for i in 0..<len(temp) {
 		infinity_guard := 0
 		for temp[i] > 255 - (255 % alphabet.len) {
@@ -281,11 +280,9 @@ generate_password :: proc(ui: ^UiState) {
 			crypto.rand_bytes(temp[i:i+1])
 			infinity_guard += 1
 		}
-		fmt.println("index: ", u8(i) % alphabet.len)
 		ui.text_bufs[.password].buf[i] = alphabet.data[temp[i] % alphabet.len]
 		ui.text_bufs[.password].len += 1
 	}
-	fmt.println(ui.text_bufs[.password])
 }
 
 BackgroundData :: struct {
@@ -297,7 +294,7 @@ ez_app_windows :: proc(app_state: ^AppState) {
 	ctx := &app_state.ui_state.mu_ctx
 	ui := &app_state.ui_state
 
-	user_input := new(UserInput)
+	user_input := new(UserInput, context.allocator)
 
 	vault := make_sample_vault()
 
@@ -410,7 +407,7 @@ ez_app_windows :: proc(app_state: ^AppState) {
 							entering_password_starting = false
 						}
 						if .SUBMIT in password_box_result {
-							password := strings.clone_from_bytes(ui.text_bufs[.password].buf[:ui.text_bufs[.password].len])
+							password := EzString{data = ui.text_bufs[.password].buf, len = u8(ui.text_bufs[.password].len)}
 							open_vault(vault, password)
 							app_state.password = password
 							reset_state(app_state)
@@ -419,11 +416,9 @@ ez_app_windows :: proc(app_state: ^AppState) {
 						for i in 0..<vault.number_of_entries {
 							entry_id: string = strings.clone_from_bytes(vault.entries[i].id.data[:vault.entries[i].id.len], allocator = context.temp_allocator)
 							filter := strings.clone_from_bytes(ui.text_bufs[.filter].buf[:ui.text_bufs[.filter].len], allocator = context.temp_allocator)
-							fmt.println(ui.case_sensitive_search)
 							if !ui.case_sensitive_search {
 								filter = strings.to_lower(filter, allocator = context.temp_allocator)
 								entry_id = strings.to_lower(entry_id, allocator = context.temp_allocator)
-								fmt.println(filter)
 							}
 							switch ui.filter_checkbox {
 								case .contains: {
@@ -461,7 +456,7 @@ ez_app_windows :: proc(app_state: ^AppState) {
 								mu.pop_id(ctx)
 								mu.push_id_string(ctx, ss.as_string(&vault.entries[i].id))
 								if .SUBMIT in mu.button(ctx, "Copy password") {
-									set_clipboard(ss.to_cstring(vault.entries[i].password))
+									set_clipboard(ss.to_cstring(vault.entries[i].password, context.temp_allocator))
 								}
 								mu.pop_id(ctx)
 							}
@@ -497,7 +492,6 @@ ez_app_windows :: proc(app_state: ^AppState) {
 							get_and_add_entry(app_state, vault)
 						}
 						append(&ui.tab_ids, ctx.last_id)
-						fmt.println(ui.tab_ids)
 
 					}
 					{mu.layout_column(ctx)
@@ -612,9 +606,9 @@ ez_app_windows :: proc(app_state: ^AppState) {
 
 main :: proc() {
 
-	app_state := new(AppState)
+	app_state := new(AppState, context.allocator)
 
-	ui := new(UiState)
+	// ui := new(UiState)
 
 	initialize_ui(&app_state.ui_state)
 

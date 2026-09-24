@@ -3,7 +3,7 @@ package smallstrings
 
 import "core:slice"
 import "core:strings"
-import "core:unicode/utf8"
+// import "core:unicode/utf8"
 
 
 SmallString :: struct($N: u8) {

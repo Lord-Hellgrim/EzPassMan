@@ -5,7 +5,7 @@ import "core:crypto/argon2id"
 import "core:crypto/aead"
 import "core:slice"
 import "core:fmt"
-import "core:mem"
+// import "core:mem"
 import "core:strings"
 
 import ss "smallstrings"
@@ -130,14 +130,12 @@ Status :: enum {
     Too_Long_Password,
 }
 
-hash_password :: proc(password: string, hash_params: ^argon2id.Parameters, salt: []u8) -> ([32]u8, Status) {
+hash_password :: proc(password: EzString, hash_params: ^argon2id.Parameters, salt: []u8) -> ([32]u8, Status) {
+    password := password
     password_hash : [32]u8
-    password_bytes : [256]u8
-    min_len := min(len(password), 255)
-    copy(password_bytes[:len(password)], password)
     alloc_error := argon2id.derive(
         hash_params, 
-        password_bytes[:len(password)], 
+        password.data[:], 
         salt[:], 
         password_hash[:]
     )
@@ -171,10 +169,7 @@ blob_to_vault :: proc(blob: []u8) -> (^Vault, Status) {
     }
 }
 
-open_vault :: proc(vault: ^Vault, password: string) -> (Status) {
-    if len(password) > 255 {
-        return .Too_Long_Password
-    }
+open_vault :: proc(vault: ^Vault, password: EzString) -> (Status) {
 
     if !vault.is_locked {
         return .Failure
@@ -191,7 +186,6 @@ open_vault :: proc(vault: ^Vault, password: string) -> (Status) {
 
     entry_buffer := slice.to_bytes(new_vault.entries[:])
 
-    ctx : aead.Context
     aead_algo := algo_from_algo(vault.aead_algo)
     opened_successfully := aead.open_oneshot(
         aead_algo, 
@@ -221,7 +215,7 @@ destroy_vault :: proc(vault: ^Vault) {
     free(vault)
 }
 
-lock_vault :: proc(vault: ^Vault, password: string) -> Status {
+lock_vault :: proc(vault: ^Vault, password: EzString) -> Status {
     password_hash, pass_hash_status := hash_password(password, &vault.password_hasher_params, vault.password_salt[:])
     if pass_hash_status != .Success {
         return .Failure
@@ -320,7 +314,7 @@ make_sample_vault :: proc() -> ^Vault {
     note = ss.from_string("Enhance all the computers", 255)
     add_entry( test_vault, Entry{ id = id, username = username, password = password, note = note } )
 
-    lock_vault(test_vault, "1234")
+    lock_vault(test_vault, ss.from_string("1234", 255))
 
     return test_vault
 }
