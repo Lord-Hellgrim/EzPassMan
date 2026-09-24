@@ -342,6 +342,7 @@ ez_app_windows :: proc(app_state: ^AppState) {
 				}
 				mu.label(ctx, "Filter by")
 				mu.textbox(ctx, ui.text_bufs[.filter].buf[:], &ui.text_bufs[.filter].len)
+				append(&ui.tab_ids, ctx.last_id)
 				mu.layout_row(ctx, {uiw(ui, 0.19)}, 50)
 				starts_with := ui.filter_checkbox == FilterState.starts_with
 				contains := ui.filter_checkbox == FilterState.contains
@@ -382,6 +383,7 @@ ez_app_windows :: proc(app_state: ^AppState) {
 					)
 					mu.label(ctx, "Enter User id")
 					res := mu.textbox(ctx, ui.text_bufs[.username].buf[:], &ui.text_bufs[.username].len, {.ALIGN_CENTER})
+					append(&ui.tab_ids, ctx.last_id)
 					if starting {
 						mu.set_focus(ctx, ctx.last_id)
 						starting = false
@@ -400,8 +402,10 @@ ez_app_windows :: proc(app_state: ^AppState) {
 							{uiw(ui, 0.8)},
 							measure_text_height(ctx.style.font)*2,
 						)
+						// TODO: Add wrong password prompt
 						mu.label(ctx, "VAULT IS LOCKED. ENTER PASSWORD")
 						password_box_result := mu.textbox(ctx, ui.text_bufs[.password].buf[:], &ui.text_bufs[.password].len, opt = {.ALIGN_CENTER}, local_style = .PasswordText)
+						append(&ui.tab_ids, ctx.last_id)
 						if entering_password_starting {
 							mu.set_focus(ctx, ctx.last_id)
 							entering_password_starting = false
@@ -574,15 +578,19 @@ ez_app_windows :: proc(app_state: ^AppState) {
 						{mu.layout_column(ctx)
 							mu.layout_row(ctx, {300}, 40)
 							if .SUBMIT in mu.textbox(ctx, ui.text_bufs[.entry_id].buf[:], &ui.text_bufs[.entry_id].len) {
+								append(&ui.tab_ids, ctx.last_id)
 								ui.confirming_edit = true
 							}
 							if .SUBMIT in mu.textbox(ctx, ui.text_bufs[.username].buf[:], &ui.text_bufs[.username].len) {
+								append(&ui.tab_ids, ctx.last_id)
 								ui.confirming_edit = true
 							}
 							if .SUBMIT in mu.textbox(ctx, ui.text_bufs[.password].buf[:], &ui.text_bufs[.password].len) {
+								append(&ui.tab_ids, ctx.last_id)
 								ui.confirming_edit = true
 							}
 							if .SUBMIT in mu.textbox(ctx, ui.text_bufs[.note].buf[:], &ui.text_bufs[.note].len) {
+								append(&ui.tab_ids, ctx.last_id)
 								ui.confirming_edit = true
 							}
 						}

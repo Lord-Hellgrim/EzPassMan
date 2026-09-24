@@ -78,19 +78,20 @@ process_user_input :: proc(user_input: ^UserInput, state: ^UiState) {
 	}
 
 	if rl.IsKeyReleased(.TAB) {
-		fmt.println("HERE")
-		if rl.IsKeyDown(.LEFT_SHIFT) || rl.IsKeyDown(.RIGHT_SHIFT) {
-			if state.current_tab_focus == -1 {
-				state.current_tab_focus = 0
-			} else if state.current_tab_focus == 0 {
-				state.current_tab_focus = len(state.tab_ids)-1
+		if len(state.tab_ids) != 0 {
+			if rl.IsKeyDown(.LEFT_SHIFT) || rl.IsKeyDown(.RIGHT_SHIFT) {
+				if state.current_tab_focus == -1 {
+					state.current_tab_focus = 0
+				} else if state.current_tab_focus == 0 {
+					state.current_tab_focus = len(state.tab_ids)-1
+				} else {
+					state.current_tab_focus -= 1
+				}
 			} else {
-				state.current_tab_focus -= 1
+				state.current_tab_focus = (state.current_tab_focus + 1) % len(state.tab_ids)
 			}
-		} else {
-			state.current_tab_focus = (state.current_tab_focus + 1) % len(state.tab_ids)
+			mu.set_focus(ctx, state.tab_ids[state.current_tab_focus])
 		}
-		mu.set_focus(ctx, state.tab_ids[state.current_tab_focus])
 	}
 
 	{
