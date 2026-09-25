@@ -135,8 +135,8 @@ hash_password :: proc(password: EzString, hash_params: ^argon2id.Parameters, sal
     password_hash : [32]u8
     alloc_error := argon2id.derive(
         hash_params, 
-        password.data[:], 
-        salt[:], 
+        password.data[:password.len],
+        salt[:],
         password_hash[:]
     )
 
@@ -180,6 +180,7 @@ open_vault :: proc(vault: ^Vault, password: EzString) -> (Status) {
 
     encrypted_entries := slice.to_bytes(vault.entries[:])
     password_hash, pass_hash_status := hash_password(password, &vault.password_hasher_params, vault.password_salt[:])
+    fmt.println(password_hash)
     if pass_hash_status != .Success {
         return .Failure
     }
@@ -440,8 +441,13 @@ delete_entry :: proc(vault: ^Vault, id: EzString) -> Status {
     if index < 0 {
         return .Failure
     } else {
-        vault.entries[index] = vault.entries[vault.number_of_entries]
-        vault.entries[vault.number_of_entries] = NullEntry
+        for i in index..<int(vault.number_of_entries) {
+            if i == MAX_ENTRIES-1 {
+                vault.entries[i] = NullEntry
+            }
+            vault.entries[i] = vault.entries[i+1]
+        }
+        vault.number_of_entries -= 1
         return .Success
     }
 }

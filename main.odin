@@ -82,13 +82,7 @@ UiState :: struct {
 	selected_entry: int,
 	starting_edit: bool,
 	confirming_edit: bool,
-	// scale_text_buffer : TextBox_State,
-	// password_text_buffer: TextBox_State,
-	// entry_id_text_state: TextBox_State,
-	// username_text_state: TextBox_State,
-	// password_text_state: TextBox_State,
-	// note_text_state: TextBox_State,
-	// filter_text_state: TextBox_State,
+	confirming_delete: bool,
 }
 
 BufId :: enum {
@@ -104,13 +98,6 @@ clear_text_buffers :: proc(ui: ^UiState) {
 	for &buffer in ui.text_bufs {
 		zero_text_buffer(&buffer)
 	}
-	// zero_text_buffer(&ui.scale_text_buffer )
-	// zero_text_buffer(&ui.password_text_buffer)
-	// zero_text_buffer(&ui.entry_id_text_state)
-	// zero_text_buffer(&ui.username_text_state)
-	// zero_text_buffer(&ui.password_text_state)
-	// zero_text_buffer(&ui.note_text_state)
-	// zero_text_buffer(&ui.filter_text_state)
 }
 
 TextBuffer :: struct {
@@ -174,8 +161,8 @@ reset_state :: proc(app_state: ^AppState) {
 	ui.confirming_edit = false
 	ui.current_tab_focus = 0
 	ui.scroll_state = 0
-	ui.selected_entry = -1
-	ui.starting_edit = true
+	ui.selected_entry = 0
+	ui.starting_edit = false
 	clear(&ui.tab_ids)
 }
 
@@ -413,6 +400,9 @@ ez_app_windows :: proc(app_state: ^AppState) {
 						if .SUBMIT in password_box_result {
 							password := EzString{data = ui.text_bufs[.password].buf, len = u8(ui.text_bufs[.password].len)}
 							open_vault(vault, password)
+							
+							fmt.println(password, "X")
+							mu.set_focus(ctx, ctx.last_id)
 							app_state.password = password
 							reset_state(app_state)
 						}
@@ -451,6 +441,7 @@ ez_app_windows :: proc(app_state: ^AppState) {
 								)
 							if .SUBMIT in mu.button(ctx, ss.as_string(&vault.entries[i].id)) {
 								ui.selected_entry = int(i)
+								ui.starting_edit = true
 								app_state.command = .edit_entry;
 							}
 							{mu.layout_column(ctx)
@@ -559,6 +550,22 @@ ez_app_windows :: proc(app_state: ^AppState) {
 							reset_state(app_state)
 							app_state.command = .view_vault
 						}
+					} else if ui.confirming_delete {
+						mu.layout_row(ctx, {300}, 50)
+						mu.label(ctx, "DELETE ENTRY?")
+						mu.layout_row(ctx, {300, 300}, 50)
+						if .SUBMIT in mu.button(ctx, "YES") {
+							fmt.println(ui.selected_entry)
+							delete_entry(vault, vault.entries[ui.selected_entry].id)
+							reset_state(app_state)
+							app_state.command = .view_vault
+							ui.confirming_delete = false
+						}
+						if .SUBMIT in mu.button(ctx, "NO") {
+							ui.confirming_delete = false
+							reset_state(app_state)
+							app_state.command = .view_vault
+						}
 					} else {
 						mu.layout_row(ctx, {500}, 50)
 						label_string : EzString
@@ -592,6 +599,12 @@ ez_app_windows :: proc(app_state: ^AppState) {
 							if .SUBMIT in mu.textbox(ctx, ui.text_bufs[.note].buf[:], &ui.text_bufs[.note].len) {
 								append(&ui.tab_ids, ctx.last_id)
 								ui.confirming_edit = true
+							}
+							if .SUBMIT in mu.button(ctx, "DELETE ENTRY") {
+								ui.confirming_delete = true
+								// delete_entry(vault, vault.entries[ui.selected_entry].id)
+								// reset_state(app_state)
+								// app_state.command = .view_vault
 							}
 						}
 					}
