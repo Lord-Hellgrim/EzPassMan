@@ -95,11 +95,18 @@ cmp_entries :: proc(i, j: Entry) -> slice.Ordering {
     i, j := i, j
     i_string := ss.as_string(&i.id)
     j_string := ss.as_string(&j.id)
+    i_string_low := strings.to_lower(i_string, allocator = context.temp_allocator)
+    j_string_low := strings.to_lower(j_string, allocator = context.temp_allocator)
 
-
-    switch strings.compare(i_string, j_string) {
+    switch strings.compare(i_string_low, j_string_low) {
         case -1: return .Less
-        case 0: return .Equal
+        case 0: {
+            switch strings.compare(i_string, j_string) {
+                case -1: return .Less
+                case .0: return .Equal
+                case 1: return .Greater
+            }
+        }
         case 1: return .Greater
     }
 
@@ -309,6 +316,12 @@ make_sample_vault :: proc() -> ^Vault {
     note = ss.from_string("Grump grump grump", 255)
     add_entry( test_vault, Entry{ id = id, username = username, password = password, note = note } )
 
+    id = ss.from_string("Jai", 255)
+    username = ss.from_string("J_Blow", 255)
+    password = ss.from_string("Witness Me!", 255)
+    note = ss.from_string("Grump grump grump", 255)
+    add_entry( test_vault, Entry{ id = id, username = username, password = password, note = note } )
+
     id = ss.from_string("Molly Rocket", 255)
     username = ss.from_string("Casey MuMu", 255)
     password = ss.from_string("Vector Vector Vector", 255)
@@ -372,6 +385,25 @@ read_entry :: proc(vault: ^Vault, id: EzString) -> (Entry, int) {
     }
 }
 
+get_entry :: proc(vault: ^Vault, #any_int index: int) -> Entry {
+    if index > int(vault.number_of_entries) {
+        return NullEntry
+    } else {
+        return vault.entries[index]
+    }
+}
+
+set_entry :: proc(vault: ^Vault, #any_int index: int, new_entry: Entry) -> Status {
+    if index > int(vault.number_of_entries) || index < 0 {
+        return .Failure
+    } else {
+        vault.entries[index] = new_entry
+    	bubble_sort_vault_entries(vault, start_index = index)
+
+        return .Success
+    }
+}
+
 add_entry :: proc(vault: ^Vault, entry: Entry) -> Status {
     if vault.is_locked {
         return .Failure
@@ -396,7 +428,7 @@ add_entry :: proc(vault: ^Vault, entry: Entry) -> Status {
                 vault.number_of_entries += 1
                 return .Success
             }
-            switch ss.cmp(entry.id, vault.entries[i].id) {
+            switch cmp_entries(entry, vault.entries[i]) {
                 case .Less: searching = false
                 case .Equal: return .Failure
                 case .Greater: continue
@@ -410,27 +442,15 @@ add_entry :: proc(vault: ^Vault, entry: Entry) -> Status {
     vault.number_of_entries += 1
     return .Success
 
-    // old_entry, index := read_entry(vault, entry.id)
-    // if old_entry == NullEntry {
-    //     vault.entries[vault.number_of_entries] = entry
-    //     vault.number_of_entries += 1
-    //     return .Success
-    // } else {
-    //     return .Failure
-    // }
 }
 
-update_entry :: proc(vault: ^Vault, new_entry: Entry) -> Status {
-    if vault.is_locked {
+update_entry :: proc(vault: ^Vault, #any_int index: int, new_entry: Entry) -> Status {
+    if index < 0 || index >= int(vault.number_of_entries) {
         return .Failure
     }
-    old_entry, index := read_entry(vault, new_entry.id)
-    if old_entry == NullEntry {
-        return .Failure
-    } else {
-        vault.entries[index] = new_entry
-        return .Success
-    }
+
+    vault.entries[index] = new_entry
+    return .Success
 }
 
 delete_entry :: proc(vault: ^Vault, id: EzString) -> Status {
@@ -452,14 +472,44 @@ delete_entry :: proc(vault: ^Vault, id: EzString) -> Status {
     }
 }
 
-bubble_sort_vault_entries :: proc(vault: ^Vault) {
-    for i in 0..<vault.number_of_entries-1 {
-        switch cmp_entries(vault.entries[i], vault.entries[i+1]) {
-            case .Less: continue
-            case .Equal: assert(false, "hit an equal entry in edit path")
-            case .Greater:  {
-                vault.entries[i], vault.entries[i+1] = vault.entries[i+1], vault.entries[i]
+bubble_sort_vault_entries :: proc(vault: ^Vault, start_index: int = 0) -> Status{
+    if start_index < 0 || start_index >= int(vault.number_of_entries) {
+        return .Failure
+    }
+
+    switch cmp_entries(vault.entries[start_index], vault.entries[start_index+1]) {
+        case .Less: {
+            i := start_index
+            for i >0 {
+                switch cmp_entries(vault.entries[i], vault.entries[i-1]) {
+                    case .Less: {
+                        vault.entries[i-1], vault.entries[i] = vault.entries[i], vault.entries[i-1]
+                        i -= 1
+                    }
+                    case .Equal: assert(false, "hit an equal entry in edit sort path")
+                    case .Greater:  {
+                        i -= 1
+                        continue
+                    }
+                }
+            }
+        }
+        case .Equal: {
+            assert(false, "hit an equal entry in edit sort path")
+        }
+        case .Greater: {
+            for i in start_index..<int(vault.number_of_entries-1) {
+                switch cmp_entries(vault.entries[i], vault.entries[i+1]) {
+                    case .Less: continue
+                    case .Equal: assert(false, "hit an equal entry in edit sort path")
+                    case .Greater:  {
+                        vault.entries[i], vault.entries[i+1] = vault.entries[i+1], vault.entries[i]
+                    }
+                }
             }
         }
     }
+
+
+    return .Success
 }

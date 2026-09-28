@@ -227,8 +227,7 @@ confirm_edit :: proc(app_state: ^AppState, vault: ^Vault) {
 		password = EzString{len = u8(ui.text_bufs[.password].len), data = ui.text_bufs[.password].buf},
 		note = EzString{len = u8(ui.text_bufs[.note].len), data = ui.text_bufs[.note].buf},
 	}
-	vault.entries[ui.selected_entry] = new_entry
-	bubble_sort_vault_entries(vault)
+	set_entry(vault, ui.selected_entry, new_entry)
 	reset_state(app_state)
 	ui.starting_edit = true
 	app_state.command = .view_vault
@@ -600,6 +599,11 @@ ez_app_windows :: proc(app_state: ^AppState) {
 								append(&ui.tab_ids, ctx.last_id)
 								ui.confirming_edit = true
 							}
+							if .SUBMIT in mu.button(ctx, "Confirm edit") {
+								append(&ui.tab_ids, ctx.last_id)
+								ui.confirming_edit = true
+							}
+							mu.label(ctx, "DANGER ZONE")
 							if .SUBMIT in mu.button(ctx, "DELETE ENTRY") {
 								ui.confirming_delete = true
 								// delete_entry(vault, vault.entries[ui.selected_entry].id)
