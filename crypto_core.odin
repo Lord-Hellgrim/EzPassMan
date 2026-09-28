@@ -398,7 +398,7 @@ set_entry :: proc(vault: ^Vault, #any_int index: int, new_entry: Entry) -> Statu
         return .Failure
     } else {
         vault.entries[index] = new_entry
-    	bubble_sort_vault_entries(vault, start_index = index)
+    	bubble_sort_vault_entries(vault, index)
 
         return .Success
     }
@@ -472,7 +472,8 @@ delete_entry :: proc(vault: ^Vault, id: EzString) -> Status {
     }
 }
 
-bubble_sort_vault_entries :: proc(vault: ^Vault, start_index: int = 0) -> Status{
+// Only works if only one entry is out of order
+bubble_sort_vault_entries :: proc(vault: ^Vault, start_index: int) -> Status{
     if start_index < 0 || start_index >= int(vault.number_of_entries) {
         return .Failure
     }
