@@ -404,6 +404,14 @@ set_entry :: proc(vault: ^Vault, #any_int index: int, new_entry: Entry) -> Statu
     }
 }
 
+vault_is_locked :: proc(vault: ^Vault) -> bool {
+    return bool(vault.is_locked)
+}
+
+vault_number_of_entries :: proc(vault: ^Vault) -> u32 {
+    return vault.number_of_entries
+}
+
 add_entry :: proc(vault: ^Vault, entry: Entry) -> Status {
     if vault.is_locked {
         return .Failure
@@ -453,12 +461,11 @@ update_entry :: proc(vault: ^Vault, #any_int index: int, new_entry: Entry) -> St
     return .Success
 }
 
-delete_entry :: proc(vault: ^Vault, id: EzString) -> Status {
+delete_entry :: proc(vault: ^Vault, #any_int index: int) -> Status {
     if vault.is_locked {
         return .Failure
     }
-    _, index := read_entry(vault, id)
-    if index < 0 {
+    if index < 0 || index >= int(vault.number_of_entries) {
         return .Failure
     } else {
         for i in index..<int(vault.number_of_entries) {

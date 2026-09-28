@@ -320,7 +320,7 @@ ez_app_windows :: proc(app_state: ^AppState) {
 						ui.scroll_state = 0
 					}
 				}
-				if !vault.is_locked {
+				if !vault_is_locked(vault) {
 					if .SUBMIT in mu.button(ctx, "Lock Vault", .NONE, {}) {
 						reset_state(app_state)
 						lock_vault(vault, app_state.password)
@@ -382,7 +382,7 @@ ez_app_windows :: proc(app_state: ^AppState) {
 					}
 				}
 				case .view_vault: {
-					if vault.is_locked {
+					if vault_is_locked(vault) {
 						mu.layout_row(
 							ctx, 
 							{uiw(ui, 0.8)},
@@ -406,8 +406,9 @@ ez_app_windows :: proc(app_state: ^AppState) {
 							reset_state(app_state)
 						}
 					} else {
-						for i in 0..<vault.number_of_entries {
-							entry_id: string = strings.clone_from_bytes(vault.entries[i].id.data[:vault.entries[i].id.len], allocator = context.temp_allocator)
+						for i in 0..<vault_number_of_entries(vault) {
+							temp_entry := get_entry(vault, i)
+							entry_id: string = strings.clone_from_bytes(temp_entry.id.data[:temp_entry.id.len], allocator = context.temp_allocator)
 							filter := strings.clone_from_bytes(ui.text_bufs[.filter].buf[:ui.text_bufs[.filter].len], allocator = context.temp_allocator)
 							if !ui.case_sensitive_search {
 								filter = strings.to_lower(filter, allocator = context.temp_allocator)
@@ -438,19 +439,20 @@ ez_app_windows :: proc(app_state: ^AppState) {
 								},
 								measure_text_height(ctx.style.font)*2
 								)
-							if .SUBMIT in mu.button(ctx, ss.as_string(&vault.entries[i].id)) {
+							temp_entry = get_entry(vault, i)
+							if .SUBMIT in mu.button(ctx, ss.as_string(&(temp_entry.id))) {
 								ui.selected_entry = int(i)
 								ui.starting_edit = true
 								app_state.command = .edit_entry;
 							}
 							{mu.layout_column(ctx)
 								mu.layout_row(ctx, {200}, measure_text_height(ctx.style.font)+10)
-								mu.push_id_string(ctx, ss.as_string(&vault.entries[i].username))
+								mu.push_id_string(ctx, ss.as_string(&temp_entry.username))
 								if .SUBMIT in mu.button(ctx, "Copy username") {}
 								mu.pop_id(ctx)
-								mu.push_id_string(ctx, ss.as_string(&vault.entries[i].id))
+								mu.push_id_string(ctx, ss.as_string(&temp_entry.id))
 								if .SUBMIT in mu.button(ctx, "Copy password") {
-									set_clipboard(ss.to_cstring(vault.entries[i].password, context.temp_allocator))
+									set_clipboard(ss.to_cstring(temp_entry.password, context.temp_allocator))
 								}
 								mu.pop_id(ctx)
 							}
@@ -523,7 +525,7 @@ ez_app_windows :: proc(app_state: ^AppState) {
 				case .edit_entry: {
 
 					if ui.starting_edit {
-						selected_entry := vault.entries[ui.selected_entry]
+						selected_entry := get_entry(vault, ui.selected_entry)
 						ui.text_bufs[.entry_id].buf = selected_entry.id.data
 						ui.text_bufs[.entry_id].len = int(selected_entry.id.len)
 	
@@ -555,7 +557,7 @@ ez_app_windows :: proc(app_state: ^AppState) {
 						mu.layout_row(ctx, {300, 300}, 50)
 						if .SUBMIT in mu.button(ctx, "YES") {
 							fmt.println(ui.selected_entry)
-							delete_entry(vault, vault.entries[ui.selected_entry].id)
+							delete_entry(vault, ui.selected_entry)
 							reset_state(app_state)
 							app_state.command = .view_vault
 							ui.confirming_delete = false
@@ -569,7 +571,8 @@ ez_app_windows :: proc(app_state: ^AppState) {
 						mu.layout_row(ctx, {500}, 50)
 						label_string : EzString
 						ss.extend_with_string(&label_string, "EDITING ENTRY: ")
-						ss.extend_in_place(&label_string, &vault.entries[ui.selected_entry].id)
+						temp_entry := get_entry(vault, ui.selected_entry)
+						ss.extend_in_place(&label_string, &temp_entry.id)
 						mu.label(ctx, ss.as_string(&label_string))
 	
 						mu.layout_row(ctx, {300, 100, 100}, 100)
@@ -606,9 +609,6 @@ ez_app_windows :: proc(app_state: ^AppState) {
 							mu.label(ctx, "DANGER ZONE")
 							if .SUBMIT in mu.button(ctx, "DELETE ENTRY") {
 								ui.confirming_delete = true
-								// delete_entry(vault, vault.entries[ui.selected_entry].id)
-								// reset_state(app_state)
-								// app_state.command = .view_vault
 							}
 						}
 					}
