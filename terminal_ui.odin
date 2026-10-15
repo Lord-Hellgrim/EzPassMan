@@ -10,6 +10,7 @@ import       "core:c/libc"
 import win32 "core:sys/windows"
 
 import ss "smallstrings"
+import crypto_core "ezpassman_crypto_core"
 
 
 orig_mode: win32.DWORD
@@ -87,7 +88,7 @@ get_password_in_terminal :: proc(allocator := context.allocator) -> string {
 	}
 }
 
-render_terminal_app :: proc(state: ^AppState, vault: ^Vault) {
+render_terminal_app :: proc(state: ^AppState, vault: crypto_core.Vault_Handle) {
     if state.help {
         fmt.println("fetch: Fetches the latest version of your vault from your current global backup")
         fmt.println("Upload: Uploads current vault version to global backup")
@@ -125,7 +126,7 @@ render_terminal_app :: proc(state: ^AppState, vault: ^Vault) {
             fmt.println("Available commands are: fetch, upload, open, lock, view, add, update, delete, help, verbose, quit")
         }
         case .view_vault:
-            print_vault(vault, state.verbose_vault)
+            crypto_core.print_vault(vault, state.verbose_vault)
             fmt.println()
             fmt.println("Available commands are: fetch, upload, open, lock, view, add, update, delete, help, verbose, quit")
 
@@ -136,7 +137,7 @@ render_terminal_app :: proc(state: ^AppState, vault: ^Vault) {
     }
 }
 
-process_terminal_input :: proc(state: ^AppState, vault: ^Vault, line: string) {
+process_terminal_input :: proc(state: ^AppState, vault: crypto_core.Vault_Handle, line: string) {
     switch line {
         case "fetch": {
             #partial switch state.command {
@@ -156,7 +157,7 @@ process_terminal_input :: proc(state: ^AppState, vault: ^Vault, line: string) {
                 case .main_menu, .view_vault: {
                     state.password = ss.from_string(get_password_in_terminal(), 255)
                     fmt.println(state.password)
-                    status := open_vault(vault, state.password)
+                    status := crypto_core.open_vault(vault, state.password)
                     switch status {
                         case .Success: {
                             fmt.println("Vault opened")
@@ -170,7 +171,7 @@ process_terminal_input :: proc(state: ^AppState, vault: ^Vault, line: string) {
             }
         }
         case "lock": {
-            lock_vault(vault, state.password)
+            crypto_core.lock_vault(vault, state.password)
         }
         case "view": {
             state.command = .view_vault

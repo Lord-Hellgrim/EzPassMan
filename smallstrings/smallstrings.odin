@@ -6,6 +6,7 @@ import "core:strings"
 // import "core:unicode/utf8"
 
 
+
 SmallString :: struct($N: u8) {
     len: u8,
     data: [N]byte,

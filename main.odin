@@ -13,6 +13,7 @@ import "base:intrinsics"
 
 import mu "microui_modified"
 import ss "smallstrings"
+import crypto_core "ezpassman_crypto_core"
 
 
 RowTable :: struct($N: int, $K: typeid, $V: typeid) where intrinsics.type_is_comparable(K) {
@@ -46,6 +47,8 @@ Command :: enum {
     edit_entry,
     entering_password,
 }
+
+EzString :: ss.SmallString(255)
 
 AppState :: struct {
     user_id: ss.SmallString(255),
@@ -196,9 +199,9 @@ load_latest_vault_task :: proc(task: thread.Task) {
 	get_latest_vault(data.vault_ptr, data.user_id)
 }
 
-get_and_add_entry :: proc(app_state: ^AppState, vault: ^Vault) {
+get_and_add_entry :: proc(app_state: ^AppState, vault: crypto_core.Vault_Handle) {
 	ui := &app_state.ui_state
-	new_entry := Entry {
+	new_entry := crypto_core.Entry {
 		id = EzString{len = u8(ui.text_bufs[.entry_id].len), data = ui.text_bufs[.entry_id].buf},
 		username = EzString{len = u8(ui.text_bufs[.username].len), data = ui.text_bufs[.username].buf},
 		password = EzString{len = u8(ui.text_bufs[.password].len), data = ui.text_bufs[.password].buf},
@@ -206,10 +209,10 @@ get_and_add_entry :: proc(app_state: ^AppState, vault: ^Vault) {
 	}
 	reset_state(app_state)
 	app_state.command = .view_vault
-	add_entry(vault, new_entry)
+	crypto_core.add_entry(vault, new_entry)
 }
 
-confirm_edit :: proc(app_state: ^AppState, vault: ^Vault) {
+confirm_edit :: proc(app_state: ^AppState, vault: crypto_core.Vault_Handle) {
 	ui := &app_state.ui_state
 	ctx := &ui.mu_ctx
 	confirm := false
@@ -221,13 +224,13 @@ confirm_edit :: proc(app_state: ^AppState, vault: ^Vault) {
 			confirm = false
 		}
 	}
-	new_entry := Entry {
+	new_entry := crypto_core.Entry {
 		id = EzString{len = u8(ui.text_bufs[.entry_id].len), data = ui.text_bufs[.entry_id].buf},
 		username = EzString{len = u8(ui.text_bufs[.username].len), data = ui.text_bufs[.username].buf},
 		password = EzString{len = u8(ui.text_bufs[.password].len), data = ui.text_bufs[.password].buf},
 		note = EzString{len = u8(ui.text_bufs[.note].len), data = ui.text_bufs[.note].buf},
 	}
-	set_entry(vault, ui.selected_entry, new_entry)
+	crypto_core.set_entry(vault, ui.selected_entry, new_entry)
 	reset_state(app_state)
 	ui.starting_edit = true
 	app_state.command = .view_vault
@@ -272,8 +275,8 @@ generate_password :: proc(ui: ^UiState) {
 }
 
 BackgroundData :: struct {
-	vault_ptr: ^Vault,
-	user_id: KeyString,
+	vault_ptr: crypto_core.Vault_Handle,
+	user_id: EzString,
 }
 
 ez_app_windows :: proc(app_state: ^AppState) {
@@ -282,7 +285,7 @@ ez_app_windows :: proc(app_state: ^AppState) {
 
 	user_input := new(UserInput, context.allocator)
 
-	vault := make_sample_vault()
+	vault := crypto_core.make_sample_vault()
 
 	starting := true
 	entering_password_starting := true
@@ -320,10 +323,10 @@ ez_app_windows :: proc(app_state: ^AppState) {
 						ui.scroll_state = 0
 					}
 				}
-				if !vault_is_locked(vault) {
+				if !crypto_core.vault_is_locked(vault) {
 					if .SUBMIT in mu.button(ctx, "Lock Vault", .NONE, {}) {
 						reset_state(app_state)
-						lock_vault(vault, app_state.password)
+						crypto_core.lock_vault(vault, app_state.password)
 					}
 				}
 				mu.label(ctx, "Filter by")
@@ -382,7 +385,7 @@ ez_app_windows :: proc(app_state: ^AppState) {
 					}
 				}
 				case .view_vault: {
-					if vault_is_locked(vault) {
+					if crypto_core.vault_is_locked(vault) {
 						mu.layout_row(
 							ctx, 
 							{uiw(ui, 0.8)},
@@ -398,7 +401,7 @@ ez_app_windows :: proc(app_state: ^AppState) {
 						}
 						if .SUBMIT in password_box_result {
 							password := EzString{data = ui.text_bufs[.password].buf, len = u8(ui.text_bufs[.password].len)}
-							open_vault(vault, password)
+							crypto_core.open_vault(vault, password)
 							
 							fmt.println(password, "X")
 							mu.set_focus(ctx, ctx.last_id)
@@ -406,8 +409,8 @@ ez_app_windows :: proc(app_state: ^AppState) {
 							reset_state(app_state)
 						}
 					} else {
-						for i in 0..<vault_number_of_entries(vault) {
-							temp_entry := get_entry(vault, i)
+						for i in 0 ..< crypto_core.vault_number_of_entries(vault) {
+							temp_entry := crypto_core.get_entry(vault, i)
 							entry_id: string = strings.clone_from_bytes(temp_entry.id.data[:temp_entry.id.len], allocator = context.temp_allocator)
 							filter := strings.clone_from_bytes(ui.text_bufs[.filter].buf[:ui.text_bufs[.filter].len], allocator = context.temp_allocator)
 							if !ui.case_sensitive_search {
@@ -439,7 +442,7 @@ ez_app_windows :: proc(app_state: ^AppState) {
 								},
 								measure_text_height(ctx.style.font)*2
 								)
-							temp_entry = get_entry(vault, i)
+							temp_entry = crypto_core.get_entry(vault, i)
 							if .SUBMIT in mu.button(ctx, ss.as_string(&(temp_entry.id))) {
 								ui.selected_entry = int(i)
 								ui.starting_edit = true
@@ -495,13 +498,13 @@ ez_app_windows :: proc(app_state: ^AppState) {
 
 						if .SUBMIT in mu.button(ctx, "ADD") {
 							append(&ui.tab_ids, ctx.last_id)
-							new_entry := Entry {
+							new_entry := crypto_core.Entry {
 								id = EzString{len = u8(ui.text_bufs[.entry_id].len), data = ui.text_bufs[.entry_id].buf},
 								username = EzString{len = u8(ui.text_bufs[.username].len), data = ui.text_bufs[.username].buf},
 								password = EzString{len = u8(ui.text_bufs[.password].len), data = ui.text_bufs[.password].buf},
 								note = EzString{len = u8(ui.text_bufs[.note].len), data = ui.text_bufs[.note].buf},
 							}
-							add_entry(vault, new_entry)
+							crypto_core.add_entry(vault, new_entry)
 							
 						}
 					}
@@ -525,7 +528,7 @@ ez_app_windows :: proc(app_state: ^AppState) {
 				case .edit_entry: {
 
 					if ui.starting_edit {
-						selected_entry := get_entry(vault, ui.selected_entry)
+						selected_entry := crypto_core.get_entry(vault, ui.selected_entry)
 						ui.text_bufs[.entry_id].buf = selected_entry.id.data
 						ui.text_bufs[.entry_id].len = int(selected_entry.id.len)
 	
@@ -557,7 +560,7 @@ ez_app_windows :: proc(app_state: ^AppState) {
 						mu.layout_row(ctx, {300, 300}, 50)
 						if .SUBMIT in mu.button(ctx, "YES") {
 							fmt.println(ui.selected_entry)
-							delete_entry(vault, ui.selected_entry)
+							crypto_core.delete_entry(vault, ui.selected_entry)
 							reset_state(app_state)
 							app_state.command = .view_vault
 							ui.confirming_delete = false
@@ -571,7 +574,7 @@ ez_app_windows :: proc(app_state: ^AppState) {
 						mu.layout_row(ctx, {500}, 50)
 						label_string : EzString
 						ss.extend_with_string(&label_string, "EDITING ENTRY: ")
-						temp_entry := get_entry(vault, ui.selected_entry)
+						temp_entry := crypto_core.get_entry(vault, ui.selected_entry)
 						ss.extend_in_place(&label_string, &temp_entry.id)
 						mu.label(ctx, ss.as_string(&label_string))
 	
@@ -646,11 +649,11 @@ main :: proc() {
 
 // -------------------Networking code -----------------------------------------------------
 
-get_latest_vault :: proc(current_vault: ^Vault, user_id: ss.SmallString(255)) {
+get_latest_vault :: proc(current_vault: crypto_core.Vault_Handle, user_id: ss.SmallString(255)) {
     // make connection to server and fetch vault
    
 }
 
-upload_vault :: proc(current_vault: ^Vault, user_id: ss.SmallString(255)) {
+upload_vault :: proc(current_vault: crypto_core.Vault_Handle, user_id: ss.SmallString(255)) {
 
 }
