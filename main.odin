@@ -199,7 +199,7 @@ load_latest_vault_task :: proc(task: thread.Task) {
 	get_latest_vault(data.vault_ptr, data.user_id)
 }
 
-get_and_add_entry :: proc(app_state: ^AppState, vault: crypto_core.Vault_Handle) {
+get_and_add_entry :: proc(app_state: ^AppState, vault: ^crypto_core.Vault) {
 	ui := &app_state.ui_state
 	new_entry := crypto_core.Entry {
 		id = EzString{len = u8(ui.text_bufs[.entry_id].len), data = ui.text_bufs[.entry_id].buf},
@@ -212,7 +212,7 @@ get_and_add_entry :: proc(app_state: ^AppState, vault: crypto_core.Vault_Handle)
 	crypto_core.add_entry(vault, new_entry)
 }
 
-confirm_edit :: proc(app_state: ^AppState, vault: crypto_core.Vault_Handle) {
+confirm_edit :: proc(app_state: ^AppState, vault: ^crypto_core.Vault) {
 	ui := &app_state.ui_state
 	ctx := &ui.mu_ctx
 	confirm := false
@@ -275,7 +275,7 @@ generate_password :: proc(ui: ^UiState) {
 }
 
 BackgroundData :: struct {
-	vault_ptr: crypto_core.Vault_Handle,
+	vault_ptr: ^crypto_core.Vault,
 	user_id: EzString,
 }
 
@@ -505,6 +505,7 @@ ez_app_windows :: proc(app_state: ^AppState) {
 								note = EzString{len = u8(ui.text_bufs[.note].len), data = ui.text_bufs[.note].buf},
 							}
 							crypto_core.add_entry(vault, new_entry)
+							app_state.command = .view_vault
 							
 						}
 					}
@@ -649,11 +650,11 @@ main :: proc() {
 
 // -------------------Networking code -----------------------------------------------------
 
-get_latest_vault :: proc(current_vault: crypto_core.Vault_Handle, user_id: ss.SmallString(255)) {
+get_latest_vault :: proc(current_vault: ^crypto_core.Vault, user_id: ss.SmallString(255)) {
     // make connection to server and fetch vault
    
 }
 
-upload_vault :: proc(current_vault: crypto_core.Vault_Handle, user_id: ss.SmallString(255)) {
+upload_vault :: proc(current_vault: ^crypto_core.Vault, user_id: ss.SmallString(255)) {
 
 }

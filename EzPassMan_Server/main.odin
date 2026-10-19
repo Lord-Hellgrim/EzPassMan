@@ -1,12 +1,16 @@
 package EzPassMan_Server
 
+import "core:crypto"
 import "core:net"
 import "core:fmt"
 import "core:crypto/noise"
 import "core:encoding/endian"
+import "core:mem"
+import "core:runtime"
 
 import noise_net"noise_networking"
 import ss "../smallstrings"
+import crypto_core "../ezpassman_crypto_core"
 
 EzString :: ss.SmallString(255)
 
@@ -46,7 +50,7 @@ parse_request :: proc(data: []u8) -> Request {
 
 main :: proc() {
 
-    vaults : map[EzString][Vault]
+    vaults := make(map[EzString]crypto_core.Vault)
 
     fmt.println("Starting...")
     server_address, parsed := net.parse_endpoint("127.0.0.1:5000")
@@ -73,7 +77,17 @@ main :: proc() {
 
         switch request.kind {
             case .NewUser: {
-                panic("NEW USER PATH UNIMPLEMENTED")
+                unverified_vault, nonce, new_user_status := noise_net.receive_data(&connection, expected_len = size_of(EzString) + size_of(crypto_core.Vault))
+                if new_user_status != .ok {
+                    continue
+                }
+                user_id := unverified_vault[:size_of(EzString)]
+                vault_handle, verification_status := crypto_core.blob_to_vault(unverified_vault[size_of(EzString):])
+                if verification_status != .Success {
+                    continue
+                } else {
+                }
+
             }
             case .FetchVault: {
                 panic("NEW USER PATH UNIMPLEMENTED")

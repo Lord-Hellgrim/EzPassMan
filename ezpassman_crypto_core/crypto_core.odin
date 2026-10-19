@@ -20,8 +20,6 @@ IV_SIZE :: 12
 
 EzString :: ss.SmallString(255)
 
-Vault_Handle :: ^Vault
-
 PasswordAlgo :: enum u16 {
     argon2id,
 }
@@ -58,7 +56,6 @@ algo_from_algo :: proc(algo: aeadAlgo) -> aead.Algorithm {
     return .AES_GCM_256
 }
 
-@(private = "file")
 Vault :: struct {   
     is_locked: b64,                                    
     magic_bytes:    [8]u8,                          
@@ -169,15 +166,15 @@ blob_is_valid :: proc(blob: []u8) -> bool {
     return true
 }
 
-blob_to_vault :: proc(blob: []u8) -> (Vault_Handle, Status) {
+blob_to_vault :: proc(blob: []u8) -> (^Vault, Status) {
     if blob_is_valid(blob) {
-        return cast(Vault_Handle)(&blob[0]), .Success
+        return cast(^Vault)(&blob[0]), .Success
     } else {
         return nil, .Failure
     }
 }
 
-open_vault :: proc(vault: Vault_Handle, password: EzString) -> (Status) {
+open_vault :: proc(vault: ^Vault, password: EzString) -> (Status) {
 
     if !vault.is_locked {
         return .Failure
@@ -218,13 +215,13 @@ open_vault :: proc(vault: Vault_Handle, password: EzString) -> (Status) {
     }
 }
 
-destroy_vault :: proc(vault: Vault_Handle) {
+destroy_vault :: proc(vault: ^Vault) {
     new_vault_bytes := slice.bytes_from_ptr(rawptr(vault), size_of(Vault))
     slice.zero(new_vault_bytes)
     free(vault)
 }
 
-lock_vault :: proc(vault: Vault_Handle, password: EzString) -> Status {
+lock_vault :: proc(vault: ^Vault, password: EzString) -> Status {
     password_hash, pass_hash_status := hash_password(password, &vault.password_hasher_params, vault.password_salt[:])
     if pass_hash_status != .Success {
         return .Failure
@@ -253,7 +250,7 @@ random_bytes :: proc($N: int) -> [N]u8 {
     return bytes
 }
 
-make_new_vault :: proc() -> Vault_Handle {
+make_new_vault :: proc() -> ^Vault {
     vault: ^Vault = new(Vault, context.allocator)
     vault.is_locked = false
     vault.magic_bytes = {'E', 'Z', 'P', 'A', 'S', 'S', 'M', 'N'}
@@ -269,10 +266,10 @@ make_new_vault :: proc() -> Vault_Handle {
     vault.number_of_entries = 0
     // vault.entries = 
 
-    return cast(Vault_Handle)vault
+    return cast(^Vault)vault
 }
 
-make_sample_vault :: proc() -> Vault_Handle {
+make_sample_vault :: proc() -> ^Vault {
     test_vault := make_new_vault()
 
     id := ss.from_string("Google: ", 255)
@@ -331,10 +328,10 @@ make_sample_vault :: proc() -> Vault_Handle {
 
     lock_vault(test_vault, ss.from_string("1234", 255))
 
-    return cast(Vault_Handle)test_vault
+    return cast(^Vault)test_vault
 }
 
-print_vault :: proc(vault: Vault_Handle, verbose: bool) {
+print_vault :: proc(vault: ^Vault, verbose: bool) {
     
     if verbose == true {    
             fmt.println("vault.locked: ", vault.is_locked)
@@ -363,7 +360,7 @@ print_vault :: proc(vault: Vault_Handle, verbose: bool) {
     fmt.println("---------------------------------")
 }
 
-read_entry :: proc(vault: Vault_Handle, id: EzString) -> (Entry, int) {
+read_entry :: proc(vault: ^Vault, id: EzString) -> (Entry, int) {
     if vault.is_locked {
         return NullEntry, -1
     }
@@ -386,7 +383,7 @@ read_entry :: proc(vault: Vault_Handle, id: EzString) -> (Entry, int) {
     }
 }
 
-get_entry :: proc(vault: Vault_Handle, #any_int index: int) -> Entry {
+get_entry :: proc(vault: ^Vault, #any_int index: int) -> Entry {
     if index > int(vault.number_of_entries) {
         return NullEntry
     } else {
@@ -394,7 +391,7 @@ get_entry :: proc(vault: Vault_Handle, #any_int index: int) -> Entry {
     }
 }
 
-set_entry :: proc(vault: Vault_Handle, #any_int index: int, new_entry: Entry) -> Status {
+set_entry :: proc(vault: ^Vault, #any_int index: int, new_entry: Entry) -> Status {
     if index > int(vault.number_of_entries) || index < 0 {
         return .Failure
     } else {
@@ -405,15 +402,15 @@ set_entry :: proc(vault: Vault_Handle, #any_int index: int, new_entry: Entry) ->
     }
 }
 
-vault_is_locked :: proc(vault: Vault_Handle) -> bool {
+vault_is_locked :: proc(vault: ^Vault) -> bool {
     return bool(vault.is_locked)
 }
 
-vault_number_of_entries :: proc(vault: Vault_Handle) -> u32 {
+vault_number_of_entries :: proc(vault: ^Vault) -> u32 {
     return vault.number_of_entries
 }
 
-add_entry :: proc(vault: Vault_Handle, entry: Entry) -> Status {
+add_entry :: proc(vault: ^Vault, entry: Entry) -> Status {
     if vault.is_locked {
         return .Failure
     }
@@ -453,7 +450,7 @@ add_entry :: proc(vault: Vault_Handle, entry: Entry) -> Status {
 
 }
 
-update_entry :: proc(vault: Vault_Handle, #any_int index: int, new_entry: Entry) -> Status {
+update_entry :: proc(vault: ^Vault, #any_int index: int, new_entry: Entry) -> Status {
     if index < 0 || index >= int(vault.number_of_entries) {
         return .Failure
     }
@@ -462,7 +459,7 @@ update_entry :: proc(vault: Vault_Handle, #any_int index: int, new_entry: Entry)
     return .Success
 }
 
-delete_entry :: proc(vault: Vault_Handle, #any_int index: int) -> Status {
+delete_entry :: proc(vault: ^Vault, #any_int index: int) -> Status {
     if vault.is_locked {
         return .Failure
     }
@@ -481,7 +478,7 @@ delete_entry :: proc(vault: Vault_Handle, #any_int index: int) -> Status {
 }
 
 // Only works if only one entry is out of order
-bubble_sort_vault_entries :: proc(vault: Vault_Handle, start_index: int) -> Status{
+bubble_sort_vault_entries :: proc(vault: ^Vault, start_index: int) -> Status{
     if start_index < 0 || start_index >= int(vault.number_of_entries) {
         return .Failure
     }

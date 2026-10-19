@@ -88,7 +88,7 @@ get_password_in_terminal :: proc(allocator := context.allocator) -> string {
 	}
 }
 
-render_terminal_app :: proc(state: ^AppState, vault: crypto_core.Vault_Handle) {
+render_terminal_app :: proc(state: ^AppState, vault: ^crypto_core.Vault) {
     if state.help {
         fmt.println("fetch: Fetches the latest version of your vault from your current global backup")
         fmt.println("Upload: Uploads current vault version to global backup")
@@ -137,7 +137,7 @@ render_terminal_app :: proc(state: ^AppState, vault: crypto_core.Vault_Handle) {
     }
 }
 
-process_terminal_input :: proc(state: ^AppState, vault: crypto_core.Vault_Handle, line: string) {
+process_terminal_input :: proc(state: ^AppState, vault: ^crypto_core.Vault, line: string) {
     switch line {
         case "fetch": {
             #partial switch state.command {
