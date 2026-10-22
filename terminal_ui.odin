@@ -9,8 +9,8 @@ import "core:unicode/utf8"
 import       "core:c/libc"
 import win32 "core:sys/windows"
 
-import ss "smallstrings"
-import crypto_core "ezpassman_crypto_core"
+import ss "../common/smallstrings"
+import crypto_core "../common/ezpassman_crypto_core"
 
 
 orig_mode: win32.DWORD

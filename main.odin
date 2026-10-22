@@ -11,9 +11,9 @@ import "core:time"
 import "core:slice"
 import "base:intrinsics"
 
-import mu "microui_modified"
-import ss "smallstrings"
-import crypto_core "ezpassman_crypto_core"
+import mu "../common/microui_modified"
+import ss "../common/smallstrings"
+import crypto_core "../common/ezpassman_crypto_core"
 
 
 RowTable :: struct($N: int, $K: typeid, $V: typeid) where intrinsics.type_is_comparable(K) {

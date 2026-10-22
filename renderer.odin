@@ -6,7 +6,7 @@ import "core:unicode/utf8"
 import "core:fmt"
 
 import rl "vendor:raylib"
-import mu "microui_modified"
+import mu "../common/microui_modified"
 
 
 RenderTexture2D :: rl.RenderTexture2D
