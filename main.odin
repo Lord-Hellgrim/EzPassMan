@@ -285,7 +285,8 @@ ez_app_windows :: proc(app_state: ^AppState) {
 
 	user_input := new(UserInput, context.allocator)
 
-	vault := crypto_core.make_sample_vault()
+	vault : ^crypto_core.Vault
+	get_latest_vault(vault, ss.from_string("test", 255))
 
 	starting := true
 	entering_password_starting := true
@@ -349,6 +350,8 @@ ez_app_windows :: proc(app_state: ^AppState) {
 				mu.checkbox(ctx, "Case sensitive", &ui.case_sensitive_search)
 			}
 		} // -------------------------End of side panel -----------------------------------------------------
+
+		// --------------------------- MAIN PANEL ---------------------------------------------------------------
 		main_banner_text : string
 		switch app_state.command {
 			case .start: main_banner_text = "START"
@@ -625,7 +628,7 @@ ez_app_windows :: proc(app_state: ^AppState) {
 				}
 	
 			}
-		}
+		} // ------------------------- END OF MAIN PANEL -------------------------------------------
 
 		mu.end(ctx)
 
@@ -652,6 +655,7 @@ main :: proc() {
 
 get_latest_vault :: proc(current_vault: ^crypto_core.Vault, user_id: ss.SmallString(255)) {
     // make connection to server and fetch vault
+	
    
 }
 
