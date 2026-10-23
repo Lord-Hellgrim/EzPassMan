@@ -1,19 +1,81 @@
 #+vet explicit-allocators
 package EzPassMan
 
+import "base:intrinsics"
+
 import "core:c"
+import "core:crypto"
 import "core:fmt"
+import "core:net"
+import "core:slice"
 import "core:strconv"
 import "core:strings"
-import "core:thread"
-import "core:crypto"
 import "core:time"
-import "core:slice"
-import "base:intrinsics"
+import "core:thread"
+import "core:encoding/endian"
 
 import mu "../common/microui_modified"
 import ss "../common/smallstrings"
 import crypto_core "../common/ezpassman_crypto_core"
+import noise_net "../common/noise_networking"
+
+
+// -------------------Networking code ----------------------------------------------------
+
+RequestType :: enum u8 {
+    NewUser = 1,
+    FetchVault = 2,
+    DeleteVault = 3,
+    UpdateVault = 4,
+    Error = 255,
+}
+
+Request :: struct {
+    kind: RequestType,
+    user_id: EzString,
+    auth_token: u64,
+}
+
+request_to_bytes :: proc(dst: []u8, request: Request) {
+	request := request
+	assert(len(dst) == size_of(Request))
+	dst[0] = cast(u8)request.kind
+	endian.put_u64(dst[1:9], .Little, request.auth_token)
+	ss.write_to_slice(dst[9:], request.user_id)
+
+}
+
+get_latest_vault :: proc(current_vault: ^crypto_core.Vault, user_id: ss.SmallString(255)) -> bool {
+	// make connection to server and fetch vault
+	server_endpoint, connected_successfully := net.parse_endpoint("127.0.0.1:5000")
+	if !connected_successfully {
+		return false
+	}
+	connection, connection_status := noise_net.initiate_connection_all_the_way(server_endpoint)
+	if connection_status != .ok {
+		return false
+	}
+
+	request := Request{kind = .FetchVault, user_id = ss.from_string("test", 255), auth_token = 5}
+
+	request_bytes : [size_of(Request)]u8
+	request_to_bytes(request_bytes[:], request)
+
+	status := noise_net.send_data(&connection, request_bytes[:], allocator = context.temp_allocator)
+	if status != .ok {
+		return false
+	}
+
+	unverified_vault, nonce, vault_status := noise_net.receive_data(&connection, expected_len = size_of(crypto_core.Vault), allocator = context.allocator)
+
+	return true
+   
+}
+
+upload_vault :: proc(current_vault: ^crypto_core.Vault, user_id: ss.SmallString(255)) {
+
+}
+ // ----------------------------------------------------------------------------------------
 
 
 RowTable :: struct($N: int, $K: typeid, $V: typeid) where intrinsics.type_is_comparable(K) {
@@ -651,14 +713,3 @@ main :: proc() {
     ez_app_windows(app_state)
 }
 
-// -------------------Networking code -----------------------------------------------------
-
-get_latest_vault :: proc(current_vault: ^crypto_core.Vault, user_id: ss.SmallString(255)) {
-    // make connection to server and fetch vault
-	
-   
-}
-
-upload_vault :: proc(current_vault: ^crypto_core.Vault, user_id: ss.SmallString(255)) {
-
-}

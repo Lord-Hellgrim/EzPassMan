@@ -2,7 +2,7 @@ package EzPassMan
 
 import "core:os"
 import "core:fmt"
-// import "core:time"
+import "core:time"
 import "core:io"
 import "core:unicode/utf8"
 
