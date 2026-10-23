@@ -66,7 +66,20 @@ get_latest_vault :: proc(current_vault: ^crypto_core.Vault, user_id: ss.SmallStr
 		return false
 	}
 
-	unverified_vault, nonce, vault_status := noise_net.receive_data(&connection, expected_len = size_of(crypto_core.Vault), allocator = context.allocator)
+	unverified_vault_slice := slice.from_ptr(current_vault, 1)
+	unverified_vault := slice.to_bytes(unverified_vault_slice)
+
+	_, _, vault_status := noise_net.receive_data(&connection, expected_len = size_of(crypto_core.Vault), dst = unverified_vault, allocator = context.allocator)
+
+	if vault_status != .ok {
+		return false
+	}
+
+	if crypto_core.blob_is_valid(unverified_vault) {
+		return true
+	} else {
+		return false
+	}
 
 	return true
    
