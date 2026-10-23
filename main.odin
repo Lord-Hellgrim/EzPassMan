@@ -47,13 +47,13 @@ request_to_bytes :: proc(dst: []u8, request: Request) {
 
 get_latest_vault :: proc(current_vault: ^crypto_core.Vault, user_id: ss.SmallString(255)) -> bool {
 	// make connection to server and fetch vault
-	server_endpoint, connected_successfully := net.parse_endpoint("127.0.0.1:5000")
-	if !connected_successfully {
-		return false
-	}
+	server_endpoint, _ := net.parse_endpoint("127.0.0.1:5000")
+
 	connection, connection_status := noise_net.initiate_connection_all_the_way(server_endpoint)
 	if connection_status != .ok {
 		return false
+	} else {
+		fmt.println("Connected to server")
 	}
 
 	request := Request{kind = .FetchVault, user_id = ss.from_string("test", 255), auth_token = 5}
@@ -61,9 +61,13 @@ get_latest_vault :: proc(current_vault: ^crypto_core.Vault, user_id: ss.SmallStr
 	request_bytes : [size_of(Request)]u8
 	request_to_bytes(request_bytes[:], request)
 
+	assert(len(request_bytes) == size_of(Request)+16)
 	status := noise_net.send_data(&connection, request_bytes[:], allocator = context.temp_allocator)
 	if status != .ok {
+		fmt.println("Request sending status: ", status)
 		return false
+	} else {
+		fmt.println("request sent successfully")
 	}
 
 	unverified_vault_slice := slice.from_ptr(current_vault, 1)
@@ -72,12 +76,18 @@ get_latest_vault :: proc(current_vault: ^crypto_core.Vault, user_id: ss.SmallStr
 	_, _, vault_status := noise_net.receive_data(&connection, expected_len = size_of(crypto_core.Vault), dst = unverified_vault, allocator = context.allocator)
 
 	if vault_status != .ok {
+		fmt.println("vault_reception status: ", vault_status)
 		return false
+	} else {
+		fmt.println("vault blob received")
 	}
 
 	if crypto_core.blob_is_valid(unverified_vault) {
+		fmt.println("vault_verified")
 		return true
 	} else {
+		fmt.println("Vault could not be verified")
+		fmt.println(unverified_vault)
 		return false
 	}
 
