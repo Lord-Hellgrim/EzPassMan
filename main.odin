@@ -62,7 +62,7 @@ get_latest_vault :: proc(current_vault: ^crypto_core.Vault, user_id: ss.SmallStr
 	request_to_bytes(request_bytes[:], request)
 
 	assert(len(request_bytes) == size_of(Request)+16)
-	status := noise_net.send_data(&connection, request_bytes[:], allocator = context.temp_allocator)
+	status := noise_net.alt_send_data(&connection, request_bytes[:])
 	if status != .ok {
 		fmt.println("Request sending status: ", status)
 		return false
@@ -73,10 +73,10 @@ get_latest_vault :: proc(current_vault: ^crypto_core.Vault, user_id: ss.SmallStr
 	unverified_vault_slice := slice.from_ptr(current_vault, 1)
 	unverified_vault := slice.to_bytes(unverified_vault_slice)
 
-	_, _, vault_status := noise_net.receive_data(&connection, expected_len = size_of(crypto_core.Vault), dst = unverified_vault, allocator = context.allocator)
+	recv_status := noise_net.alt_receive_data(&connection, unverified_vault, expected_len = u64(len(unverified_vault)))
 
-	if vault_status != .ok {
-		fmt.println("vault_reception status: ", vault_status)
+	if recv_status != .ok {
+		fmt.println("vault_reception status: ", recv_status)
 		return false
 	} else {
 		fmt.println("vault blob received")
